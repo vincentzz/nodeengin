@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Graph Computation Engine</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Toolbar -->
+        <div id="toolbar">
+            <div class="toolbar-section">
+                <button id="addNodeBtn" class="btn btn-primary">Add Node</button>
+                <button id="groupNodesBtn" class="btn btn-secondary">Group Selected Nodes</button>
+            </div>
+            <div class="toolbar-section">
+                <label for="evaluationDelay" style="color: white; margin-right: 8px;">Eval Delay:</label>
+                <input type="number" id="evaluationDelay" min="0" max="5000" step="100" value="0" style="width: 80px; padding: 4px; border-radius: 3px; border: 1px solid #bdc3c7;">
+                <span style="color: white; margin-left: 4px;">ms</span>
+            </div>
+            <div class="toolbar-section">
+                <button id="exportBtn" class="btn btn-secondary">Export Graph</button>
+                <button id="importBtn" class="btn btn-secondary">Import Graph</button>
+            </div>
+        </div>
+
+        <!-- Main content area -->
+        <div id="mainContent">
+            <!-- Main workspace -->
+            <div id="workspace">
+                <!-- Canvas for connections -->
+                <canvas id="connectionCanvas"></canvas>
+                
+                <!-- Node container -->
+                <div id="nodeContainer"></div>
+            </div>
+
+            <!-- Template Panel -->
+            <div id="templatePanel">
+                <div class="template-header">
+                    <h3>Node Templates</h3>
+                    <button id="collapseTemplateBtn" class="btn btn-small">⮜</button>
+                </div>
+                <div id="templateContainer">
+                    <!-- Templates will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Code Editor Modal -->
+        <div id="codeEditorModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Edit Node Code</h3>
+                    <span class="close">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <div class="editor-section">
+                        <label>Node Name:</label>
+                        <input type="text" id="nodeNameInput" placeholder="Enter node name">
+                    </div>
+                    <div class="editor-section">
+                        <label>Code (function that processes inputs and returns outputs):</label>
+                        <textarea id="codeEditor" placeholder="// Example:
+// function process(inputs) {
+//   return {
+//     result: inputs.data * 2
+//   };
+// }"></textarea>
+                    </div>
+                    <div class="editor-section">
+                        <label>Input Ports (comma-separated, optional):</label>
+                        <input type="text" id="inputPorts" placeholder="data, config (leave empty for no inputs)">
+                    </div>
+                    <div class="editor-section">
+                        <label>Output Ports (comma-separated):</label>
+                        <input type="text" id="outputPorts" placeholder="result, status" value="result">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="saveNodeBtn" class="btn btn-primary">Save</button>
+                    <button id="cancelNodeBtn" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Panel -->
+        <div id="resultsPanel">
+            <div class="results-header">
+                <h3>Execution Results</h3>
+                <button id="clearResultsBtn" class="btn btn-secondary btn-small" title="Clear Results">Clear</button>
+            </div>
+            <div id="resultsContent">
+                <p>Run the graph to see results...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load modules -->
+    <script src="modules/canvas.js"></script>
+    <script src="modules/node.js"></script>
+    <script src="modules/connection.js"></script>
+    <script src="modules/executor.js"></script>
+    <script src="modules/codeEditor.js"></script>
+    <script src="modules/templateManager.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
