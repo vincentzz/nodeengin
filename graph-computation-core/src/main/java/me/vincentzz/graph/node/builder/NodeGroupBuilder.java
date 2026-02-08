@@ -66,6 +66,18 @@ public final class NodeGroupBuilder implements NodeBuilder {
         this.exports = scope;
     }
 
+    public NodeBuilder getChildBuilder(String name) {
+        return nodeMap.get(name);
+    }
+
+    public Scope<ConnectionPoint> getExports() {
+        return exports;
+    }
+
+    public Set<String> nodeNames() {
+        return Set.copyOf(nodeMap.keySet());
+    }
+
     @Override
     public String name() {
         return name;

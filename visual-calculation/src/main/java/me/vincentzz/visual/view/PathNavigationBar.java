@@ -36,6 +36,9 @@ public class PathNavigationBar extends HBox {
         setPadding(new Insets(8, 12, 8, 12));
         setMinHeight(35);
         
+        // Ensure all children are center-aligned vertically
+        setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+        
         // Apply styling
         setStyle(
             "-fx-background-color: " + toHexString(ColorScheme.NAV_BACKGROUND) + ";" +
@@ -93,11 +96,13 @@ public class PathNavigationBar extends HBox {
     private void addSegmentButton(String text, int segmentIndex, boolean isRoot) {
         Button button = new Button(text);
         
-        // Style the button
+        // Style the button with consistent font styling
         button.setStyle(
             "-fx-background-color: transparent;" +
             "-fx-text-fill: " + toHexString(ColorScheme.TEXT_PRIMARY) + ";" +
             "-fx-font-size: 13px;" +
+            "-fx-font-weight: normal;" +
+            "-fx-font-family: system;" +
             "-fx-padding: 4 8 4 8;" +
             "-fx-border-color: transparent;" +
             "-fx-cursor: hand;"
@@ -108,6 +113,8 @@ public class PathNavigationBar extends HBox {
             "-fx-background-color: " + toHexString(ColorScheme.NODE_HOVER) + ";" +
             "-fx-text-fill: " + toHexString(ColorScheme.TEXT_PRIMARY) + ";" +
             "-fx-font-size: 13px;" +
+            "-fx-font-weight: normal;" +
+            "-fx-font-family: system;" +
             "-fx-padding: 4 8 4 8;" +
             "-fx-border-color: transparent;" +
             "-fx-cursor: hand;"
@@ -117,6 +124,8 @@ public class PathNavigationBar extends HBox {
             "-fx-background-color: transparent;" +
             "-fx-text-fill: " + toHexString(ColorScheme.TEXT_PRIMARY) + ";" +
             "-fx-font-size: 13px;" +
+            "-fx-font-weight: normal;" +
+            "-fx-font-family: system;" +
             "-fx-padding: 4 8 4 8;" +
             "-fx-border-color: transparent;" +
             "-fx-cursor: hand;"
@@ -142,7 +151,9 @@ public class PathNavigationBar extends HBox {
         label.setStyle(
             "-fx-text-fill: " + color + ";" +
             "-fx-font-size: 13px;" +
-            "-fx-font-weight: " + (isActive ? "bold" : "normal") + ";"
+            "-fx-font-weight: normal;" +
+            "-fx-font-family: system;" +
+            "-fx-padding: 4 8 4 8;"
         );
         
         getChildren().add(label);
@@ -152,7 +163,10 @@ public class PathNavigationBar extends HBox {
         Label separator = new Label(SEPARATOR);
         separator.setStyle(
             "-fx-text-fill: " + toHexString(ColorScheme.TEXT_MUTED) + ";" +
-            "-fx-font-size: 13px;"
+            "-fx-font-size: 13px;" +
+            "-fx-font-weight: normal;" +
+            "-fx-font-family: system;" +
+            "-fx-padding: 4 0 4 0;"
         );
         getChildren().add(separator);
     }

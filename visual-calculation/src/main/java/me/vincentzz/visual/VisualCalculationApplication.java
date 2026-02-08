@@ -10,7 +10,10 @@ import me.vincentzz.falcon.ifo.FalconResourceId;
 import me.vincentzz.falcon.node.AskProvider;
 import me.vincentzz.falcon.node.BidProvider;
 import me.vincentzz.falcon.node.HardcodeAttributeProvider;
+import me.vincentzz.falcon.node.MarkToMarketCalculator;
 import me.vincentzz.falcon.node.MidSpreadCalculator;
+import me.vincentzz.falcon.node.VolumeProvider;
+import me.vincentzz.falcon.node.VwapCalculator;
 import me.vincentzz.graph.json.NodeTypeRegistry;
 import me.vincentzz.graph.node.NodeGroup;
 import me.vincentzz.visual.controller.MainController;
@@ -83,6 +86,9 @@ public class VisualCalculationApplication extends Application {
                 NodeTypeRegistry.registerNodeType("BidProvider", BidProvider.class);
                 NodeTypeRegistry.registerNodeType("MidSpreadCalculator", MidSpreadCalculator.class);
                 NodeTypeRegistry.registerNodeType("HardcodeAttributeProvider", HardcodeAttributeProvider.class);
+                NodeTypeRegistry.registerNodeType("VolumeProvider", VolumeProvider.class);
+                NodeTypeRegistry.registerNodeType("VwapCalculator", VwapCalculator.class);
+                NodeTypeRegistry.registerNodeType("MarkToMarketCalculator", MarkToMarketCalculator.class);
 
                 // Register resource types
                 NodeTypeRegistry.registerResourceType("FalconResourceId", FalconResourceId.class);

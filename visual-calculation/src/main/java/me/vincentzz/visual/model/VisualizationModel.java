@@ -282,19 +282,21 @@ public class VisualizationModel {
     }
     
     public List<ConnectionViewModel> getConnectionsForCurrentPath() {
-        Set<Path> currentNodes = getNodesForCurrentPath().stream()
-            .map(NodeViewModel::getNodePath)
+        Set<String> currentNodePaths = getNodesForCurrentPath().stream()
+            .map(n -> n.getNodePath().toString().replace('\\', '/'))
             .collect(Collectors.toSet());
-        
+
         return connections.stream()
-            .filter(conn -> currentNodes.contains(conn.getSourcePath()) || 
-                           currentNodes.contains(conn.getTargetPath()))
+            .filter(conn -> currentNodePaths.contains(conn.getSourcePath().toString().replace('\\', '/')) ||
+                           currentNodePaths.contains(conn.getTargetPath().toString().replace('\\', '/')))
             .collect(Collectors.toList());
     }
     
     private boolean isChildOfCurrentPath(Path nodePath) {
-        return nodePath.getParent() != null && 
-               nodePath.getParent().equals(currentPath);
+        if (nodePath.getParent() == null) return false;
+        String parentStr = nodePath.getParent().toString().replace('\\', '/');
+        String currentStr = currentPath.toString().replace('\\', '/');
+        return parentStr.equals(currentStr);
     }
     
     // Accessors

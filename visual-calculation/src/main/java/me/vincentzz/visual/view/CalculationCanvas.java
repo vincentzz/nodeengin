@@ -148,7 +148,8 @@ public class CalculationCanvas extends ScrollPane {
             "-fx-background-color: " + toHexString(ColorScheme.BACKGROUND_MEDIUM) + ";" +
             "-fx-text-fill: " + toHexString(ColorScheme.TEXT_PRIMARY) + ";" +
             "-fx-border-color: " + toHexString(ColorScheme.NODE_BORDER) + ";" +
-            "-fx-font-size: 12px;"
+            "-fx-font-size: 12px;" +
+            "-fx-font-family: 'Courier New', 'Monaco', 'Consolas', monospace;"
         );
         
         // Initial render
@@ -162,10 +163,29 @@ public class CalculationCanvas extends ScrollPane {
         canvas.setOnMouseDragged(this::handleMouseDragged);
         canvas.setOnMouseReleased(this::handleMouseReleased);
         canvas.setOnMouseExited(this::handleMouseExit);
+        canvas.setOnKeyPressed(e -> {
+            if (isDraggingFlywire && e.getCode() == javafx.scene.input.KeyCode.ESCAPE) {
+                cancelFlywireCreation();
+            }
+        });
     }
     
     private void handleMouseMove(MouseEvent event) {
         lastMousePos = new Point2D(event.getX(), event.getY());
+
+        // If dragging a flywire preview, update the endpoint and re-render
+        if (isDraggingFlywire) {
+            flywireCurrentPoint = new Point2D(event.getX(), event.getY());
+            render();
+            return;
+        }
+
+        // Store previous hover states to detect changes
+        NodeViewModel previousHoveredNode = hoveredNode;
+        ResourceIdentifier previousPathInput = hoveredPathInput;
+        ResourceIdentifier previousPathOutput = hoveredPathOutput;
+        NodeViewModel previousNodeConnectionPointNode = hoveredNodeConnectionPointNode;
+        ResourceIdentifier previousNodeConnectionPointResource = hoveredNodeConnectionPointResource;
         
         // Clear all previous hover states first
         clearAllHoverStates();
@@ -177,21 +197,30 @@ public class CalculationCanvas extends ScrollPane {
         ResourceIdentifier pathOutputAtMouse = findPathOutputAt(event.getX(), event.getY());
         
         // Apply hover state based on priority (connection points > nodes > path points)
+        boolean hoverStateChanged = false;
+        
         if (nodeConnectionPoint != null) {
             // Highest priority: individual node connection points
             setNodeConnectionPointHover(nodeConnectionPoint, event.getX(), event.getY());
+            hoverStateChanged = (previousNodeConnectionPointNode != nodeConnectionPoint.node || 
+                               !nodeConnectionPoint.resource.equals(previousNodeConnectionPointResource));
         } else if (nodeAtMouse != null) {
             // Medium priority: general node hover
             setNodeHover(nodeAtMouse, event.getX(), event.getY());
+            hoverStateChanged = (previousHoveredNode != nodeAtMouse);
         } else if (pathInputAtMouse != null) {
             // Lower priority: path input connection points
             setPathInputHover(pathInputAtMouse, event.getX(), event.getY());
+            hoverStateChanged = !pathInputAtMouse.equals(previousPathInput);
         } else if (pathOutputAtMouse != null) {
             // Lower priority: path output connection points  
             setPathOutputHover(pathOutputAtMouse, event.getX(), event.getY());
+            hoverStateChanged = !pathOutputAtMouse.equals(previousPathOutput);
         } else {
             // No hover target found
             hideTooltip();
+            hoverStateChanged = (previousHoveredNode != null || previousPathInput != null || 
+                               previousPathOutput != null || previousNodeConnectionPointNode != null);
         }
         
         // Update cursor
@@ -199,8 +228,8 @@ public class CalculationCanvas extends ScrollPane {
                            hoveredPathInput != null || hoveredPathOutput != null);
         setCursor(hasHover ? Cursor.HAND : Cursor.DEFAULT);
         
-        // Re-render if there's any hover state
-        if (hasHover) {
+        // Only re-render if hover state actually changed to avoid unnecessary redraws
+        if (hoverStateChanged) {
             render();
         }
     }
@@ -243,16 +272,28 @@ public class CalculationCanvas extends ScrollPane {
     
     private void setPathInputHover(ResourceIdentifier pathInput, double x, double y) {
         hoveredPathInput = pathInput;
-        showPathResourceTooltip(hoveredPathInput, x, y, true);
+        // Use the same function as sub-node tooltips for perfect consistency
+        showConnectionPointTooltip(currentPath, hoveredPathInput, true, x, y);
     }
     
     private void setPathOutputHover(ResourceIdentifier pathOutput, double x, double y) {
         hoveredPathOutput = pathOutput;
-        showPathResourceTooltip(hoveredPathOutput, x, y, false);
+        // Use the same function as sub-node tooltips for perfect consistency
+        showConnectionPointTooltip(currentPath, hoveredPathOutput, false, x, y);
     }
     
     private void handleMouseClick(MouseEvent event) {
         if (event.getClickCount() == 1) {
+            // If in flywire creation mode, complete or cancel
+            if (isDraggingFlywire) {
+                NodeViewModel targetNode = findNodeAt(event.getX(), event.getY());
+                if (targetNode != null && targetNode != flywireSourceNode) {
+                    openFlywireDialogWithPrefill(flywireSourceNode, flywireSourceResource, targetNode);
+                }
+                cancelFlywireCreation();
+                return;
+            }
+
             // Check if click is on floating control panel first (only in edit mode)
             if (editModel != null && isClickOnControlPanel(event.getX(), event.getY())) {
                 handleControlPanelClick(event.getX(), event.getY());
@@ -286,7 +327,25 @@ public class CalculationCanvas extends ScrollPane {
                 }
             }
         } else if (event.getClickCount() == 2) {
-            // Double click
+            // In edit mode, double-click on output connection point starts flywire creation
+            if (editModel != null) {
+                NodeConnectionPointInfo cpInfo = findNodeConnectionPointAt(event.getX(), event.getY());
+                if (cpInfo != null && !cpInfo.isInput) {
+                    isDraggingFlywire = true;
+                    flywireSourceNode = cpInfo.node;
+                    flywireSourceResource = cpInfo.resource;
+                    var pos = cpInfo.node.getOutputConnectionPoint(cpInfo.resource);
+                    flywireStartPoint = new Point2D(pos.x(), pos.y());
+                    flywireCurrentPoint = new Point2D(event.getX(), event.getY());
+                    setCursor(Cursor.CROSSHAIR);
+                    canvas.setFocusTraversable(true);
+                    canvas.requestFocus();
+                    render();
+                    return;
+                }
+            }
+
+            // Double click on node for navigation
             NodeViewModel clickedNode = findNodeAt(event.getX(), event.getY());
             if (clickedNode != null && onNodeDoubleClicked != null) {
                 onNodeDoubleClicked.accept(clickedNode.getNodePath());
@@ -812,6 +871,59 @@ public class CalculationCanvas extends ScrollPane {
         alert.showAndWait();
     }
     
+    /**
+     * Cancel flywire creation mode and reset all flywire state.
+     */
+    private void cancelFlywireCreation() {
+        isDraggingFlywire = false;
+        flywireSourceNode = null;
+        flywireSourceResource = null;
+        flywireStartPoint = null;
+        flywireCurrentPoint = null;
+        setCursor(Cursor.DEFAULT);
+        render();
+    }
+
+    /**
+     * Open CreateFlywireDialog pre-filled with source and target info from canvas interaction.
+     */
+    private void openFlywireDialogWithPrefill(NodeViewModel sourceNode, ResourceIdentifier sourceResource, NodeViewModel targetNode) {
+        if (editModel == null) return;
+        var builder = editModel.getCurrentNodeBuilder();
+        if (!(builder instanceof me.vincentzz.graph.node.builder.NodeGroupBuilder ngb)) return;
+
+        CreateFlywireDialog dialog = new CreateFlywireDialog(
+            ngb.nodes(),
+            sourceNode.getDisplayName(),
+            sourceResource,
+            targetNode.getDisplayName()
+        );
+        dialog.showAndWait().ifPresent(flywire -> {
+            try {
+                ngb.addFlywire(flywire);
+                if (onStructuralChange != null) {
+                    onStructuralChange.run();
+                }
+            } catch (Exception e) {
+                showErrorAlert("Flywire Creation Failed", "Failed to create flywire: " + e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * Render a dashed blue preview line during flywire creation.
+     */
+    private void renderFlywirePreview() {
+        gc.setStroke(ColorScheme.CONNECTION_FLYWIRE);
+        gc.setLineWidth(CONNECTION_LINE_WIDTH);
+        gc.setLineDashes(6, 4);
+        drawCurvedConnection(
+            flywireStartPoint.getX(), flywireStartPoint.getY(),
+            flywireCurrentPoint.getX(), flywireCurrentPoint.getY()
+        );
+        gc.setLineDashes(null);
+    }
+
     /**
      * Handle Ctrl+click on a node - toggle its selection without affecting others.
      */
@@ -1417,14 +1529,24 @@ public class CalculationCanvas extends ScrollPane {
             ResourceIdentifier input = pathInputs.get(i);
             double y = startY + i * ySpacing;
             
-            // Render label first (on the left)
+            // Render label first (right-aligned to connection point with extra space for status bar)
             String label = getShortResourceName(input);
+            Text labelText = new Text(label);
+            labelText.setFont(gc.getFont());
+            double labelWidth = labelText.getBoundsInLocal().getWidth();
+            
             gc.setFill(ColorScheme.TEXT_SECONDARY);
-            gc.fillText(label, leftTextX, y + 4);
+            // Add extra space (20px) to account for status bar on the left side of connection point
+            gc.fillText(label, leftConnectionX - labelWidth - 20, y + 4); // Right-aligned with 20px gap for status bar
             
             // Render connection point at aligned position
             Color pointColor = ColorScheme.getConnectionPointColor(getShortResourceName(input));
             renderConnectionPoint(leftConnectionX, y, pointColor, true);
+            
+            // Add status indicator for path input (only in result viewing mode)
+            if (editModel == null) {
+                renderPathConnectionPointStatusIndicator(leftConnectionX, y, true, input);
+            }
         }
         
         // Render right side outputs  
@@ -1450,18 +1572,21 @@ public class CalculationCanvas extends ScrollPane {
             ResourceIdentifier output = pathOutputs.get(i);
             double y = startY + i * ySpacing;
             
-            // Render label first (on the right, right-aligned)
+            // Render label first (left-aligned from connection point with extra space for status bar)
             String label = getShortResourceName(output);
-            Text labelText = new Text(label);
-            labelText.setFont(gc.getFont());
-            double labelWidth = labelText.getBoundsInLocal().getWidth();
             
             gc.setFill(ColorScheme.TEXT_SECONDARY);
-            gc.fillText(label, rightTextEndX - labelWidth, y + 4);
+            // Add extra space (20px) to account for status bar on the right side of connection point
+            gc.fillText(label, rightConnectionX + 20, y + 4); // Left-aligned with 20px gap for status bar
             
             // Render connection point at aligned position
             Color pointColor = ColorScheme.getConnectionPointColor(getShortResourceName(output));
             renderConnectionPoint(rightConnectionX, y, pointColor, false);
+            
+            // Add status indicator for path output (only in result viewing mode)
+            if (editModel == null) {
+                renderPathConnectionPointStatusIndicator(rightConnectionX, y, false, output);
+            }
         }
     }
     
@@ -1474,8 +1599,9 @@ public class CalculationCanvas extends ScrollPane {
     }
     
     private NodeViewModel findNodeByPath(Path path) {
+        String normalized = path.toString().replace('\\', '/');
         return nodes.stream()
-                   .filter(node -> node.getNodePath().equals(path))
+                   .filter(node -> node.getNodePath().toString().replace('\\', '/').equals(normalized))
                    .findFirst()
                    .orElse(null);
     }
@@ -1513,7 +1639,12 @@ public class CalculationCanvas extends ScrollPane {
         
         // Render connections first (behind nodes)
         renderConnections();
-        
+
+        // Render flywire preview line if in creation mode
+        if (isDraggingFlywire && flywireStartPoint != null && flywireCurrentPoint != null) {
+            renderFlywirePreview();
+        }
+
         // Render nodes (with their own connection points)
         renderNodes();
         
@@ -1965,15 +2096,15 @@ public class CalculationCanvas extends ScrollPane {
      */
     private boolean getConnectionPointStatus(NodeViewModel node, ResourceIdentifier resource, boolean isInput) {
         if (model == null) {
-            return true; // Default to success if no model
+            return false; // No model means not evaluated
         }
-        
+
         try {
             var nodeEvaluation = model.getEvaluationResult().nodeEvaluationMap().get(node.getNodePath());
             if (nodeEvaluation == null) {
-                return true; // Default to success if no evaluation data
+                return false; // No evaluation data means not evaluated
             }
-            
+
             if (isInput) {
                 // For input connection points, check if the input result is successful
                 var inputResult = nodeEvaluation.inputs().get(resource);
@@ -1986,14 +2117,28 @@ public class CalculationCanvas extends ScrollPane {
                 if (outputResult != null) {
                     return isResultSuccessful(outputResult.value());
                 }
+
+                // For NodeGroups, the output may be produced by a child node.
+                // Search child node evaluations for this resource.
+                if (node.isNodeGroup()) {
+                    String nodePathStr = node.getNodePath().toString().replace('\\', '/');
+                    for (var entry : model.getEvaluationResult().nodeEvaluationMap().entrySet()) {
+                        String candidateStr = entry.getKey().toString().replace('\\', '/');
+                        if (candidateStr.startsWith(nodePathStr + "/")) {
+                            var childOutput = entry.getValue().outputs().get(resource);
+                            if (childOutput != null) {
+                                return isResultSuccessful(childOutput.value());
+                            }
+                        }
+                    }
+                }
             }
-            
-            // If no specific result found, default to success
-            return true;
-            
+
+            // If no specific result found, the attribute was not evaluated
+            return false;
+
         } catch (Exception e) {
-            // If any error occurs, default to success to avoid visual noise
-            return true;
+            return false;
         }
     }
     
@@ -2006,6 +2151,117 @@ public class CalculationCanvas extends ScrollPane {
         }
         
         return result instanceof me.vincentzz.lang.Result.Success;
+    }
+    
+    /**
+     * Render status indicator for path-level connection points (inputs/outputs on canvas sides).
+     */
+    private void renderPathConnectionPointStatusIndicator(double x, double y, boolean isInput, ResourceIdentifier resource) {
+        // Only show status indicators in result viewing mode (when we have evaluation results)
+        // In edit mode (editModel != null), nodes are not evaluated yet, so no status indicators
+        if (editModel != null) {
+            return; // Skip status indicators in edit mode
+        }
+        
+        // Get the status from evaluation results for path-level resources
+        boolean isSuccess = getPathConnectionPointStatus(resource, isInput);
+        
+        // Status bar dimensions
+        double statusBarWidth = 3;
+        double statusBarHeight = 12;
+        
+        // Position the status bar - REVERSED to avoid crossing connection lines
+        double statusBarX;
+        if (isInput) {
+            // For path input connection points, put status bar on the LEFT of the dot
+            // (connections come from the right, so status bar goes on the opposite side)
+            statusBarX = x - CONNECTION_POINT_RADIUS - statusBarWidth - 2;
+        } else {
+            // For path output connection points, put status bar on the RIGHT of the dot
+            // (connections go to the left, so status bar goes on the opposite side)
+            statusBarX = x + CONNECTION_POINT_RADIUS + 2;
+        }
+        double statusBarY = y - statusBarHeight / 2;
+        
+        // Choose color based on status
+        Color statusColor = isSuccess ? Color.GREEN : Color.RED;
+        
+        // Draw the status bar
+        gc.setFill(statusColor);
+        gc.fillRect(statusBarX, statusBarY, statusBarWidth, statusBarHeight);
+        
+        // Draw a subtle border around the status bar
+        gc.setStroke(statusColor.darker());
+        gc.setLineWidth(0.5);
+        gc.strokeRect(statusBarX, statusBarY, statusBarWidth, statusBarHeight);
+    }
+    
+    /**
+     * Get the success/failure status for a path-level connection point.
+     */
+    private boolean getPathConnectionPointStatus(ResourceIdentifier resource, boolean isInput) {
+        if (model == null || currentPath == null) {
+            return false; // Default to failure if no model or path
+        }
+        
+        try {
+            // First, always check top-level results as the primary source for path-level resources
+            var topLevelResults = model.getEvaluationResult().results();
+            if (topLevelResults.containsKey(resource)) {
+                boolean isSuccess = isResultSuccessful(topLevelResults.get(resource));
+                System.out.println("DEBUG: Path " + (isInput ? "input" : "output") + " " + resource + 
+                                 " found in top-level results: " + (isSuccess ? "SUCCESS" : "FAILURE"));
+                return isSuccess;
+            }
+            
+            // Secondary check: current path's node evaluation
+            var nodeEvaluation = model.getEvaluationResult().nodeEvaluationMap().get(currentPath);
+            if (nodeEvaluation != null) {
+                if (isInput) {
+                    // For path input connection points, check if the input result is successful
+                    var inputResult = nodeEvaluation.inputs().get(resource);
+                    if (inputResult != null) {
+                        boolean isSuccess = isResultSuccessful(inputResult.value());
+                        System.out.println("DEBUG: Path input " + resource + 
+                                         " found in current path inputs: " + (isSuccess ? "SUCCESS" : "FAILURE"));
+                        return isSuccess;
+                    }
+                } else {
+                    // For path output connection points, check if the output result is successful
+                    var outputResult = nodeEvaluation.outputs().get(resource);
+                    if (outputResult != null) {
+                        boolean isSuccess = isResultSuccessful(outputResult.value());
+                        System.out.println("DEBUG: Path output " + resource + 
+                                         " found in current path outputs: " + (isSuccess ? "SUCCESS" : "FAILURE"));
+                        return isSuccess;
+                    }
+                }
+            }
+            
+            // Tertiary check: look through all node evaluations to find this resource
+            for (var entry : model.getEvaluationResult().nodeEvaluationMap().entrySet()) {
+                var pathKey = entry.getKey();
+                var evaluation = entry.getValue();
+                
+                if (!isInput && evaluation.outputs().containsKey(resource)) {
+                    // Found the resource as an output in some node
+                    boolean isSuccess = isResultSuccessful(evaluation.outputs().get(resource).value());
+                    System.out.println("DEBUG: Path output " + resource + 
+                                     " found in node " + pathKey + " outputs: " + (isSuccess ? "SUCCESS" : "FAILURE"));
+                    return isSuccess;
+                }
+            }
+            
+            // If no result found anywhere, this means the resource is unfulfilled/uncomputed
+            System.out.println("DEBUG: Path " + (isInput ? "input" : "output") + " " + resource + 
+                             " NOT FOUND anywhere - returning FAILURE");
+            return false;
+            
+        } catch (Exception e) {
+            System.err.println("ERROR: Exception in getPathConnectionPointStatus for " + resource + ": " + e.getMessage());
+            e.printStackTrace();
+            return false;
+        }
     }
     
     private String getShortResourceName(ResourceIdentifier resourceId) {
@@ -2424,13 +2680,16 @@ public class CalculationCanvas extends ScrollPane {
         for (ResourceIdentifier output : pathOutputs) {
             Point2D outputPoint = getPathOutputPoint(output);
             if (outputPoint != null) {
-                // Check connection point dot
+                // Expand the detection area significantly to make it more stable
+                double expandedRadius = CONNECTION_POINT_RADIUS + 15; // Increased from 5 to 15
+                
+                // Check connection point dot with larger tolerance
                 double distance = Math.sqrt(Math.pow(x - outputPoint.getX(), 2) + Math.pow(y - outputPoint.getY(), 2));
-                if (distance <= CONNECTION_POINT_RADIUS + 5) { // 5px tolerance for easier hovering
+                if (distance <= expandedRadius) {
                     return output;
                 }
                 
-                // Check output label area (text is right-aligned at rightTextEndX - labelWidth, y + 4)
+                // Check output label area with more generous bounds
                 double rightTextEndX = canvas.getWidth() - 20;
                 double startY = 100;
                 double ySpacing = 40;
@@ -2443,11 +2702,23 @@ public class CalculationCanvas extends ScrollPane {
                 double labelWidth = labelText.getBoundsInLocal().getWidth();
                 double labelHeight = labelText.getBoundsInLocal().getHeight();
                 
-                double labelX = rightTextEndX - labelWidth;
+                // Position calculation should match the rendering logic exactly
+                double maxOutputTextWidth = 0;
+                for (ResourceIdentifier pathOutput : pathOutputs) {
+                    String pathLabel = getShortResourceName(pathOutput);
+                    Text pathLabelText = new Text(pathLabel);
+                    pathLabelText.setFont(Font.font("Arial", FontWeight.BOLD, 12));
+                    double pathLabelWidth = pathLabelText.getBoundsInLocal().getWidth();
+                    maxOutputTextWidth = Math.max(maxOutputTextWidth, pathLabelWidth);
+                }
                 
-                // Check if mouse is within label bounds
-                if (x >= labelX && x <= labelX + labelWidth && 
-                    y >= labelY - labelHeight && y <= labelY + 4) {
+                double rightConnectionX = rightTextEndX - maxOutputTextWidth - 15;
+                double actualLabelX = rightConnectionX + 20; // This matches the rendering logic
+                
+                // Expand label detection area for better stability
+                double labelPadding = 10;
+                if (x >= actualLabelX - labelPadding && x <= actualLabelX + labelWidth + labelPadding && 
+                    y >= labelY - labelHeight - labelPadding && y <= labelY + 4 + labelPadding) {
                     return output;
                 }
             }
@@ -2457,60 +2728,188 @@ public class CalculationCanvas extends ScrollPane {
     }
     
     /**
+     * Show detailed ResourceIdentifier tooltip for path connection points immediately (no delay).
+     * Uses the same format as node connection point tooltips for consistency.
+     */
+    private void showPathResourceTooltipImmediate(ResourceIdentifier resourceId, double x, double y, boolean isInput) {
+        StringBuilder tooltipText = new StringBuilder();
+        tooltipText.append("ResourceId : ").append(resourceId.toString()).append("\n");
+        
+        if (model != null && currentPath != null) {
+            var nodeEvaluation = model.getEvaluationResult().nodeEvaluationMap().get(currentPath);
+            
+            if (isInput) {
+                // For path inputs, show the same detailed information as node inputs
+                if (nodeEvaluation != null && nodeEvaluation.inputs().containsKey(resourceId)) {
+                    var inputResult = nodeEvaluation.inputs().get(resourceId);
+                    Optional<Boolean> isDirect = inputResult.inputContext().isDirectInput();
+                    isDirect.ifPresent(d -> tooltipText.append("IsDirect   : ").append(d).append("\n"));
+
+                    InputSourceType st = inputResult.inputContext().sourceType();
+                    tooltipText.append("Tracing    : ").append(st).append("\n");
+
+                    var result = inputResult.value();
+                    switch (result) {
+                        case Success r -> tooltipText.append("Value      : ").append(r.get()).append("\n");
+                        case Failure e ->
+                                tooltipText.append("Error      : ").append(e.getException().getMessage()).append("\n");
+                    }
+                } else {
+                    // Fallback: check if there's an adhoc override or dependency value
+                    String adhocValue = getAdhocOutputValue(resourceId);
+                    if (adhocValue != null) {
+                        tooltipText.append("Value      : ").append(adhocValue).append("\n");
+                        tooltipText.append("Tracing    : ByAdhoc").append("\n");
+                    } else {
+                        String dependencyValue = getDependencyValue(resourceId);
+                        if (dependencyValue != null) {
+                            tooltipText.append("Value      : ").append(dependencyValue).append("\n");
+                            tooltipText.append("Tracing    : ByResolve").append("\n");
+                        } else {
+                            tooltipText.append("Value      : No value available").append("\n");
+                            tooltipText.append("Tracing    : Unknown").append("\n");
+                        }
+                    }
+                }
+            } else {
+                // For path outputs, show the same detailed information as node outputs
+                if (nodeEvaluation != null && nodeEvaluation.outputs().containsKey(resourceId)) {
+                    var outputResult = nodeEvaluation.outputs().get(resourceId);
+                    OutputValueType vt = outputResult.outputContext().resultType();
+                    tooltipText.append("Tracing    : ").append(vt).append("\n");
+                    Result<Object> result = outputResult.value();
+                    switch (result) {
+                        case Success r -> tooltipText.append("Value      : ").append(r.get()).append("\n");
+                        case Failure e ->
+                                tooltipText.append("Error      : ").append(e.getException().getMessage()).append("\n");
+                    }
+                } else {
+                    // Check if this output is available from child nodes
+                    boolean foundInChild = false;
+                    for (var entry : model.getEvaluationResult().nodeEvaluationMap().entrySet()) {
+                        var evaluation = entry.getValue();
+                        if (evaluation.outputs().containsKey(resourceId)) {
+                            var outputResult = evaluation.outputs().get(resourceId);
+                            OutputValueType vt = outputResult.outputContext().resultType();
+                            tooltipText.append("Tracing    : ").append(vt).append(" (from ").append(getNodeDisplayName(entry.getKey())).append(")").append("\n");
+                            Result<Object> result = outputResult.value();
+                            switch (result) {
+                                case Success r -> tooltipText.append("Value      : ").append(r.get()).append("\n");
+                                case Failure e ->
+                                        tooltipText.append("Error      : ").append(e.getException().getMessage()).append("\n");
+                            }
+                            foundInChild = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!foundInChild) {
+                        tooltipText.append("Value      : Not computed").append("\n");
+                        tooltipText.append("Tracing    : Unknown").append("\n");
+                    }
+                }
+            }
+        } else {
+            // Fallback when no model is available
+            tooltipText.append("Value      : No model available").append("\n");
+            tooltipText.append("Tracing    : Unknown").append("\n");
+        }
+        
+        // Show tooltip immediately without delay
+        tooltip.setText(tooltipText.toString());
+        Platform.runLater(() -> {
+            tooltip.show(canvas, x + canvas.localToScreen(canvas.getBoundsInLocal()).getMinX() + 10,
+                               y + canvas.localToScreen(canvas.getBoundsInLocal()).getMinY() - 10);
+        });
+    }
+    
+    /**
      * Show detailed ResourceIdentifier tooltip for path connection points.
+     * Uses the same format as node connection point tooltips for consistency.
      */
     private void showPathResourceTooltip(ResourceIdentifier resourceId, double x, double y, boolean isInput) {
         StringBuilder tooltipText = new StringBuilder();
-        tooltipText.append(isInput ? "PATH INPUT" : "PATH OUTPUT").append("\n");
-        tooltipText.append("Resource: ").append(resourceId.toString()).append("\n");
+        tooltipText.append("ResourceId : ").append(resourceId.toString()).append("\n");
         
-        // Try to extract detailed information from FalconResourceId format
-        String resourceString = resourceId.toString();
-        if (resourceString.contains("FalconResourceId[")) {
-            // Parse FalconResourceId format
-            if (resourceString.contains("ifo=")) {
-                String ifo = extractValue(resourceString, "ifo=");
-                if (ifo != null) {
-                    tooltipText.append("IFO: ").append(ifo).append("\n");
-                }
-            }
+        if (model != null && currentPath != null) {
+            var nodeEvaluation = model.getEvaluationResult().nodeEvaluationMap().get(currentPath);
             
-            if (resourceString.contains("source=")) {
-                String source = extractValue(resourceString, "source=");
-                if (source != null) {
-                    tooltipText.append("Source: ").append(source).append("\n");
-                }
-            }
-            
-            if (resourceString.contains("attribute=")) {
-                String attribute = extractValue(resourceString, "attribute=");
-                if (attribute != null) {
-                    // Clean up class attribute format
-                    if (attribute.startsWith("class ")) {
-                        String className = attribute.substring("class ".length());
-                        int lastDot = className.lastIndexOf('.');
-                        if (lastDot != -1) {
-                            attribute = className.substring(lastDot + 1);
+            if (isInput) {
+                // For path inputs, show the same detailed information as node inputs
+                if (nodeEvaluation != null && nodeEvaluation.inputs().containsKey(resourceId)) {
+                    var inputResult = nodeEvaluation.inputs().get(resourceId);
+                    Optional<Boolean> isDirect = inputResult.inputContext().isDirectInput();
+                    isDirect.ifPresent(d -> tooltipText.append("IsDirect   : ").append(d).append("\n"));
+
+                    InputSourceType st = inputResult.inputContext().sourceType();
+                    tooltipText.append("Tracing    : ").append(st).append("\n");
+
+                    var result = inputResult.value();
+                    switch (result) {
+                        case Success r -> tooltipText.append("Value      : ").append(r.get()).append("\n");
+                        case Failure e ->
+                                tooltipText.append("Error      : ").append(e.getException().getMessage()).append("\n");
+                    }
+                } else {
+                    // Fallback: check if there's an adhoc override or dependency value
+                    String adhocValue = getAdhocOutputValue(resourceId);
+                    if (adhocValue != null) {
+                        tooltipText.append("Value      : ").append(adhocValue).append("\n");
+                        tooltipText.append("Tracing    : ByAdhoc").append("\n");
+                    } else {
+                        String dependencyValue = getDependencyValue(resourceId);
+                        if (dependencyValue != null) {
+                            tooltipText.append("Value      : ").append(dependencyValue).append("\n");
+                            tooltipText.append("Tracing    : ByResolve").append("\n");
                         } else {
-                            attribute = className;
+                            tooltipText.append("Value      : No value available").append("\n");
+                            tooltipText.append("Tracing    : Unknown").append("\n");
                         }
                     }
-                    tooltipText.append("Attribute: ").append(attribute).append("\n");
+                }
+            } else {
+                // For path outputs, show the same detailed information as node outputs
+                if (nodeEvaluation != null && nodeEvaluation.outputs().containsKey(resourceId)) {
+                    var outputResult = nodeEvaluation.outputs().get(resourceId);
+                    OutputValueType vt = outputResult.outputContext().resultType();
+                    tooltipText.append("Tracing    : ").append(vt).append("\n");
+                    Result<Object> result = outputResult.value();
+                    switch (result) {
+                        case Success r -> tooltipText.append("Value      : ").append(r.get()).append("\n");
+                        case Failure e ->
+                                tooltipText.append("Error      : ").append(e.getException().getMessage()).append("\n");
+                    }
+                } else {
+                    // Check if this output is available from child nodes
+                    boolean foundInChild = false;
+                    for (var entry : model.getEvaluationResult().nodeEvaluationMap().entrySet()) {
+                        var evaluation = entry.getValue();
+                        if (evaluation.outputs().containsKey(resourceId)) {
+                            var outputResult = evaluation.outputs().get(resourceId);
+                            OutputValueType vt = outputResult.outputContext().resultType();
+                            tooltipText.append("Tracing    : ").append(vt).append(" (from ").append(getNodeDisplayName(entry.getKey())).append(")").append("\n");
+                            Result<Object> result = outputResult.value();
+                            switch (result) {
+                                case Success r -> tooltipText.append("Value      : ").append(r.get()).append("\n");
+                                case Failure e ->
+                                        tooltipText.append("Error      : ").append(e.getException().getMessage()).append("\n");
+                            }
+                            foundInChild = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!foundInChild) {
+                        tooltipText.append("Value      : Not computed").append("\n");
+                        tooltipText.append("Tracing    : Unknown").append("\n");
+                    }
                 }
             }
-        }
-        
-        // Add value information for both inputs and outputs
-        if (isInput) {
-            String inputValue = getPathInputValueForTooltip(resourceId);
-            tooltipText.append("Input Value: ").append(inputValue).append("\n");
         } else {
-            String outputValue = getPathOutputValue(resourceId);
-            tooltipText.append("Output Value: ").append(outputValue).append("\n");
+            // Fallback when no model is available
+            tooltipText.append("Value      : No model available").append("\n");
+            tooltipText.append("Tracing    : Unknown").append("\n");
         }
-        
-        // Add connection type information
-        tooltipText.append("Type: ").append(isInput ? "External Input" : "Available Output");
         
         // Use 100ms delay for connection point tooltips
         showTooltipWithDelay(tooltipText.toString(), x, y, CONNECTION_POINT_TOOLTIP_DELAY);
@@ -2587,30 +2986,52 @@ public class CalculationCanvas extends ScrollPane {
     
     
     /**
-     * Show detailed tooltip for node connection points.
+     * Unified tooltip function for all connection points (path-level and sub-node).
+     * This ensures identical logic and content across all tooltip types.
      */
-    private void showNodeConnectionPointTooltip(NodeViewModel node, ResourceIdentifier resource, boolean isInput, double x, double y) {
+    private void showConnectionPointTooltip(Path nodePath, ResourceIdentifier resource, boolean isInput, double x, double y) {
         StringBuilder tooltipText = new StringBuilder();
         tooltipText.append("ResourceId : ").append(resource.toString()).append("\n");
-        if (model != null ) {
-            var nodeEvaluation = model.getEvaluationResult().nodeEvaluationMap().get(node.getNodePath());
-            // Add value information for both inputs and outputs
+        
+        if (model != null && nodePath != null) {
+            var nodeEvaluation = model.getEvaluationResult().nodeEvaluationMap().get(nodePath);
+            
             if (isInput) {
-                var inputResult = nodeEvaluation.inputs().get(resource);
-                Optional<Boolean> isDirect = inputResult.inputContext().isDirectInput();
-                isDirect.ifPresent(d -> tooltipText.append("IsDirect   : ").append(d).append("\n"));
+                // For inputs, show the same detailed information
+                if (nodeEvaluation != null && nodeEvaluation.inputs().containsKey(resource)) {
+                    var inputResult = nodeEvaluation.inputs().get(resource);
+                    Optional<Boolean> isDirect = inputResult.inputContext().isDirectInput();
+                    isDirect.ifPresent(d -> tooltipText.append("IsDirect   : ").append(d).append("\n"));
 
-                InputSourceType st = inputResult.inputContext().sourceType();
-                tooltipText.append("Tracing    : ").append(st).append("\n");
+                    InputSourceType st = inputResult.inputContext().sourceType();
+                    tooltipText.append("Tracing    : ").append(st).append("\n");
 
-                var result = inputResult.value();
-                switch (result) {
-                    case Success r -> tooltipText.append("Value      : ").append(r.get()).append("\n");
-                    case Failure e ->
-                            tooltipText.append("Error      : ").append(e.getException().getMessage()).append("\n");
+                    var result = inputResult.value();
+                    switch (result) {
+                        case Success r -> tooltipText.append("Value      : ").append(r.get()).append("\n");
+                        case Failure e ->
+                                tooltipText.append("Error      : ").append(e.getException().getMessage()).append("\n");
+                    }
+                } else {
+                    // Fallback: check if there's an adhoc override or dependency value
+                    String adhocValue = getAdhocOutputValue(resource);
+                    if (adhocValue != null) {
+                        tooltipText.append("Value      : ").append(adhocValue).append("\n");
+                        tooltipText.append("Tracing    : ByAdhoc").append("\n");
+                    } else {
+                        String dependencyValue = getDependencyValue(resource);
+                        if (dependencyValue != null) {
+                            tooltipText.append("Value      : ").append(dependencyValue).append("\n");
+                            tooltipText.append("Tracing    : ByResolve").append("\n");
+                        } else {
+                            tooltipText.append("Value      : No value available").append("\n");
+                            tooltipText.append("Tracing    : Unknown").append("\n");
+                        }
+                    }
                 }
             } else {
-                if (node.hasResult(resource)) {
+                // For outputs, show the same detailed information
+                if (nodeEvaluation != null && nodeEvaluation.outputs().containsKey(resource)) {
                     var outputResult = nodeEvaluation.outputs().get(resource);
                     OutputValueType vt = outputResult.outputContext().resultType();
                     tooltipText.append("Tracing    : ").append(vt).append("\n");
@@ -2621,12 +3042,48 @@ public class CalculationCanvas extends ScrollPane {
                                 tooltipText.append("Error      : ").append(e.getException().getMessage()).append("\n");
                     }
                 } else {
-                    tooltipText.append("Output Value: ").append("Not computed").append("\n");
+                    // Check if this output is available from child nodes
+                    boolean foundInChild = false;
+                    for (var entry : model.getEvaluationResult().nodeEvaluationMap().entrySet()) {
+                        var evaluation = entry.getValue();
+                        if (evaluation.outputs().containsKey(resource)) {
+                            var outputResult = evaluation.outputs().get(resource);
+                            OutputValueType vt = outputResult.outputContext().resultType();
+                            tooltipText.append("Tracing    : ").append(vt).append(" (from ").append(getNodeDisplayName(entry.getKey())).append(")").append("\n");
+                            Result<Object> result = outputResult.value();
+                            switch (result) {
+                                case Success r -> tooltipText.append("Value      : ").append(r.get()).append("\n");
+                                case Failure e ->
+                                        tooltipText.append("Error      : ").append(e.getException().getMessage()).append("\n");
+                            }
+                            foundInChild = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!foundInChild) {
+                        tooltipText.append("Value      : Not computed").append("\n");
+                        tooltipText.append("Tracing    : Unknown").append("\n");
+                    }
                 }
             }
+        } else {
+            // Fallback when no model is available
+            tooltipText.append("Value      : No model available").append("\n");
+            tooltipText.append("Tracing    : Unknown").append("\n");
         }
+        
         // Use 100ms delay for connection point tooltips
         showTooltipWithDelay(tooltipText.toString(), x, y, CONNECTION_POINT_TOOLTIP_DELAY);
+    }
+    
+    /**
+     * Show detailed tooltip for node connection points.
+     * This method now delegates to the unified tooltip function.
+     */
+    private void showNodeConnectionPointTooltip(NodeViewModel node, ResourceIdentifier resource, boolean isInput, double x, double y) {
+        // Use the unified tooltip function for consistency
+        showConnectionPointTooltip(node.getNodePath(), resource, isInput, x, y);
     }
     
     /**

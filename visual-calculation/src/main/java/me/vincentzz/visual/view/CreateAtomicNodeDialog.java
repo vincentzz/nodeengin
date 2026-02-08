@@ -6,11 +6,12 @@ import javafx.scene.layout.GridPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import me.vincentzz.graph.json.NodeTypeRegistry;
+import me.vincentzz.graph.node.CalculationNode;
 import me.vincentzz.visual.util.ColorScheme;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
+import java.lang.reflect.RecordComponent;
+import java.util.*;
 
 /**
  * Dialog for creating new atomic nodes with construction parameters.
@@ -58,35 +59,25 @@ public class CreateAtomicNodeDialog extends Dialog<Map<String, String>> {
     }
     
     private void addParametersForNodeClass(String nodeClass) {
-        // Add parameters based on the specific atomic node class
-        switch (nodeClass) {
-            case "AskProvider":
-            case "BidProvider":
-            case "VolumeProvider":
-                addParameter("name", "Node name", "");
-                addParameter("ifo", "IFO identifier", "GOOGLE");
-                addParameter("source", "Data source", "FALCON");
-                break;
-                
-            case "MidSpreadCalculator":
-            case "VwapCalculator":
-            case "MarkToMarketCalculator":
-                addParameter("name", "Node name", "");
-                break;
-                
-            case "HardcodeAttributeProvider":
-                addParameter("name", "Node name", "");
-                addParameter("resourceId", "Resource identifier", "");
-                addParameter("value", "Hardcoded value", "0.0");
-                break;
-                
-            default:
-                // Generic parameters for unknown node types
-                addParameter("name", "Node name", "");
-                addParameter("param1", "Parameter 1", "");
-                addParameter("param2", "Parameter 2", "");
-                break;
+        // Derive constructor parameters dynamically from record components
+        try {
+            Class<? extends CalculationNode> clazz = NodeTypeRegistry.getNodeClass(nodeClass);
+            if (clazz.isRecord()) {
+                RecordComponent[] components = clazz.getRecordComponents();
+                for (RecordComponent component : components) {
+                    String paramName = component.getName();
+                    String paramType = component.getType().getSimpleName();
+                    addParameter(paramName, paramName + " (" + paramType + ")", "");
+                }
+                return;
+            }
+        } catch (Exception e) {
+            // Fallback if reflection fails or type not registered
         }
+
+        // Fallback for unregistered types
+        addParameter("param1", "Parameter 1", "");
+        addParameter("param2", "Parameter 2", "");
     }
     
     private void addParameter(String paramName, String labelText, String defaultValue) {

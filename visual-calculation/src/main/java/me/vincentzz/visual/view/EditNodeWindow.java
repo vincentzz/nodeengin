@@ -21,8 +21,11 @@ import me.vincentzz.graph.node.CalculationNode;
 import me.vincentzz.graph.node.ConnectionPoint;
 import me.vincentzz.graph.node.Flywire;
 import me.vincentzz.graph.node.NodeGroup;
+import me.vincentzz.graph.scope.Exclude;
+import me.vincentzz.graph.scope.Include;
 import me.vincentzz.graph.scope.Scope;
 import me.vincentzz.graph.json.ConstructionalJsonUtil;
+import me.vincentzz.graph.json.NodeTypeRegistry;
 import me.vincentzz.visual.model.EditCanvasModel;
 import me.vincentzz.visual.model.NodeViewModel;
 import me.vincentzz.visual.util.ColorScheme;
@@ -129,10 +132,28 @@ public class EditNodeWindow extends Stage {
         try {
             // Create root NodeBuilder from the graph
             this.rootNodeBuilder = NodeBuilder.fromNode(graph);
-            
-            // Navigate to current path to get the NodeBuilder we're editing
-            this.currentNodeBuilder = navigateToNodeBuilder(rootNodeBuilder, currentPath);
-            
+
+            // Navigate to current path using real child builder references (not copies)
+            this.currentNodeBuilder = rootNodeBuilder;
+            String pathStr = currentPath.toString();
+            if (pathStr.startsWith("/root/")) {
+                pathStr = pathStr.substring("/root/".length());
+            } else if (pathStr.startsWith("/root") || pathStr.equals("/")) {
+                pathStr = "";
+            } else if (pathStr.startsWith("/")) {
+                pathStr = pathStr.substring(1);
+            }
+
+            if (!pathStr.isEmpty()) {
+                for (String segment : pathStr.split("/")) {
+                    if (!segment.isEmpty() && currentNodeBuilder instanceof NodeGroupBuilder ngb) {
+                        NodeBuilder child = ngb.getChildBuilder(segment);
+                        if (child != null) {
+                            currentNodeBuilder = child;
+                        }
+                    }
+                }
+            }
         } catch (Exception e) {
             throw new RuntimeException("Failed to initialize NodeBuilder", e);
         }
@@ -327,14 +348,17 @@ public class EditNodeWindow extends Stage {
      */
     private void initializeNodeVisibility() {
         visibleNodeNames.clear();
-        
+
+        // Clear the model's filter first so getNodes() returns ALL nodes (unfiltered)
+        editCanvasModel.setVisibleNodes(Set.of());
+
         // Get all nodes and make them all visible by default
         var allNodes = editCanvasModel.getNodes();
         for (var node : allNodes) {
             visibleNodeNames.add(node.getDisplayName());
         }
-        
-        // Set visibility in model and let canvas handle state preservation
+
+        // Set visibility in model
         editCanvasModel.setVisibleNodes(visibleNodeNames);
     }
     
@@ -464,24 +488,66 @@ public class EditNodeWindow extends Stage {
         Label visibilityLabel = new Label("Node Visibility");
         visibilityLabel.setFont(Font.font("System", FontWeight.BOLD, 14));
         visibilityLabel.setTextFill(ColorScheme.TEXT_PRIMARY);
-        
+
         Label instructionLabel = new Label("Check/uncheck to show/hide nodes on canvas:");
         instructionLabel.setFont(Font.font("System", 11));
         instructionLabel.setTextFill(ColorScheme.TEXT_SECONDARY);
         instructionLabel.setWrapText(true);
-        
+
         ScrollPane nodeScrollPane = new ScrollPane(nodeCheckboxContainer);
         nodeScrollPane.setFitToWidth(true);
         nodeScrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
         nodeScrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         styleScrollPane(nodeScrollPane);
-        
+
+        // Create Group button
+        createGroupButton.setMaxWidth(Double.MAX_VALUE);
+
+        // Flywires section
+        Label flywireLabel = new Label("Flywires");
+        flywireLabel.setFont(Font.font("System", FontWeight.BOLD, 14));
+        flywireLabel.setTextFill(ColorScheme.TEXT_PRIMARY);
+
+        Button addFlywireButton = new Button("Add Flywire");
+        addFlywireButton.setOnAction(e -> handleAddFlywire());
+        addFlywireButton.setMaxWidth(Double.MAX_VALUE);
+
+        ScrollPane flywireScrollPane = new ScrollPane(flywireContainer);
+        flywireScrollPane.setFitToWidth(true);
+        flywireScrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        flywireScrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        flywireScrollPane.setPrefHeight(120);
+        styleScrollPane(flywireScrollPane);
+
+        // Scope section
+        Label scopeLabel = new Label("Scope (Exports)");
+        scopeLabel.setFont(Font.font("System", FontWeight.BOLD, 14));
+        scopeLabel.setTextFill(ColorScheme.TEXT_PRIMARY);
+
+        Button editScopeButton = new Button("Edit Scope");
+        editScopeButton.setOnAction(e -> handleEditScope());
+        editScopeButton.setMaxWidth(Double.MAX_VALUE);
+
+        ScrollPane scopeScrollPane = new ScrollPane(scopeContainer);
+        scopeScrollPane.setFitToWidth(true);
+        scopeScrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scopeScrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scopeScrollPane.setPrefHeight(80);
+        styleScrollPane(scopeScrollPane);
+
         nodeOperationsColumn.getChildren().addAll(
             visibilityLabel,
             instructionLabel,
-            nodeScrollPane
+            nodeScrollPane,
+            createGroupButton,
+            flywireLabel,
+            addFlywireButton,
+            flywireScrollPane,
+            scopeLabel,
+            editScopeButton,
+            scopeScrollPane
         );
-        
+
         // Set the scroll pane to fill remaining space
         VBox.setVgrow(nodeScrollPane, Priority.ALWAYS);
     }
@@ -623,34 +689,90 @@ public class EditNodeWindow extends Stage {
     
     private void populateScope() {
         scopeContainer.getChildren().clear();
-        
+
         if (currentNodeBuilder instanceof NodeGroupBuilder ngb) {
-            // TODO: Display scope information
-            Label scopeInfo = new Label("Scope editing not yet implemented");
-            scopeInfo.setTextFill(ColorScheme.TEXT_SECONDARY);
-            scopeContainer.getChildren().add(scopeInfo);
+            Scope<ConnectionPoint> scope = ngb.getExports();
+            String modeText;
+            Set<ConnectionPoint> points;
+            if (scope instanceof Include<ConnectionPoint> inc) {
+                modeText = "Include";
+                points = inc.resources();
+            } else if (scope instanceof Exclude<ConnectionPoint> exc) {
+                modeText = "Exclude";
+                points = exc.resources();
+            } else {
+                modeText = "Unknown";
+                points = Set.of();
+            }
+
+            Label modeLabel = new Label("Mode: " + modeText + " (" + points.size() + " entries)");
+            modeLabel.setTextFill(ColorScheme.TEXT_PRIMARY);
+            scopeContainer.getChildren().add(modeLabel);
+
+            for (ConnectionPoint cp : points) {
+                Label cpLabel = new Label("  " + cp.nodePath() + " : " + cp.rid());
+                cpLabel.setTextFill(ColorScheme.TEXT_SECONDARY);
+                scopeContainer.getChildren().add(cpLabel);
+            }
         }
     }
     
     private void populateAtomicNodeOptions() {
         atomicNodeContainer.getChildren().clear();
-        
+
         List<String> atomicNodeClasses = getAvailableAtomicNodeClasses();
-        
+
+        // Collect existing instances grouped by class simple name
+        Map<String, List<CalculationNode>> instancesByClass = new LinkedHashMap<>();
+        if (currentNodeBuilder instanceof NodeGroupBuilder ngb) {
+            for (CalculationNode child : ngb.nodes()) {
+                String className = child.getClass().getSimpleName();
+                instancesByClass.computeIfAbsent(className, k -> new ArrayList<>()).add(child);
+            }
+        }
+
         for (String atomicNodeClass : atomicNodeClasses) {
+            VBox classSection = new VBox(3);
+
             HBox nodeRow = new HBox(10);
             nodeRow.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
-            
+
             Label nodeLabel = new Label(atomicNodeClass);
             nodeLabel.setTextFill(ColorScheme.TEXT_PRIMARY);
             nodeLabel.setPrefWidth(200);
-            
+
             Button createButton = new Button("Create");
             createButton.setOnAction(e -> handleCreateAtomicNode(atomicNodeClass));
-            styleButton(createButton); // Apply styling immediately
-            
+            styleButton(createButton);
+
             nodeRow.getChildren().addAll(nodeLabel, createButton);
-            atomicNodeContainer.getChildren().add(nodeRow);
+            classSection.getChildren().add(nodeRow);
+
+            // Add foldable tree of existing instances
+            List<CalculationNode> instances = instancesByClass.get(atomicNodeClass);
+            if (instances != null && !instances.isEmpty()) {
+                VBox instanceList = new VBox(2);
+                instanceList.setPadding(new Insets(2, 0, 2, 10));
+                for (CalculationNode instance : instances) {
+                    Label instanceLabel = new Label("  " + instance.name());
+                    instanceLabel.setTextFill(ColorScheme.TEXT_SECONDARY);
+                    instanceLabel.setFont(Font.font("System", 11));
+                    instanceList.getChildren().add(instanceLabel);
+                }
+                TitledPane titledPane = new TitledPane(
+                    instances.size() + " instance" + (instances.size() > 1 ? "s" : ""),
+                    instanceList
+                );
+                titledPane.setExpanded(false);
+                titledPane.setAnimated(false);
+                titledPane.setStyle(
+                    "-fx-text-fill: " + toHexString(ColorScheme.TEXT_SECONDARY) + ";" +
+                    "-fx-font-size: 11px;"
+                );
+                classSection.getChildren().add(titledPane);
+            }
+
+            atomicNodeContainer.getChildren().add(classSection);
         }
     }
     
@@ -772,17 +894,19 @@ public class EditNodeWindow extends Stage {
             // Also refresh other components that might be affected
             populateFlywires();
             populateScope();
-            
+            populateAtomicNodeOptions();
+
             System.out.println("DEBUG: Refreshed EditNodeWindow with updated NodeBuilder after structural change");
-            
+
         } catch (Exception e) {
             System.err.println("ERROR: Failed to handle structural change: " + e.getMessage());
             e.printStackTrace();
-            
+
             // Fallback: just refresh the UI without updating the model
             populateNodeVisibility();
             populateFlywires();
             populateScope();
+            populateAtomicNodeOptions();
         }
     }
     
@@ -792,39 +916,12 @@ public class EditNodeWindow extends Stage {
      * Enhanced to handle multi-layer grouping properly.
      */
     private void updateRootNodeBuilderFromCurrent() {
-        try {
-            System.out.println("DEBUG: Updating root NodeBuilder from current path: " + currentPath);
-            
-            // Convert current NodeBuilder to CalculationNode
-            CalculationNode updatedCurrentNode = currentNodeBuilder.toNode();
-            System.out.println("DEBUG: Converted current NodeBuilder to CalculationNode: " + updatedCurrentNode.name());
-            
-            // If we're at root, just update the root builder
-            if (currentPath.toString().equals("/") || currentPath.toString().equals("/root")) {
-                System.out.println("DEBUG: At root path, updating root builder directly");
-                this.rootNodeBuilder = NodeBuilder.fromNode(updatedCurrentNode);
-                return;
-            }
-            
-            // For non-root paths, we need to properly reconstruct the hierarchy
-            System.out.println("DEBUG: Non-root path, reconstructing hierarchy");
-            
-            // CRITICAL FIX: Use the current root NodeBuilder state, not the original graph
-            // This ensures that previous changes are preserved
-            CalculationNode currentRootNode = this.rootNodeBuilder.toNode();
-            
-            // Replace the node at currentPath with the updated node
-            CalculationNode newRootNode = replaceNodeAtPath(currentRootNode, currentPath, updatedCurrentNode);
-            
-            // Update root builder with the new structure
-            this.rootNodeBuilder = NodeBuilder.fromNode(newRootNode);
-            
-            System.out.println("DEBUG: Successfully updated root NodeBuilder");
-            
-        } catch (Exception e) {
-            System.err.println("ERROR: Failed to update root NodeBuilder: " + e.getMessage());
-            e.printStackTrace();
-        }
+        // No-op: All mutations go through getChildBuilder() references which are
+        // live pointers into the mutable builder tree. rootNodeBuilder always
+        // reflects the latest state without needing to be recreated.
+        // Recreating via NodeBuilder.fromNode() would create a DISCONNECTED copy
+        // that breaks referential integrity with currentNodeBuilder and the
+        // EditCanvasModel's builder stack.
     }
     
     /**
@@ -969,7 +1066,8 @@ public class EditNodeWindow extends Stage {
     }
     
     private void handleNodeDoubleClick(Path nodePath) {
-        // Navigate into the node
+        // nodePath is a full path (e.g. /root/childName). Use navigateToPath
+        // which walks from rootNodeBuilder — works reliably after any edits.
         navigateToPath(nodePath);
     }
     
@@ -988,80 +1086,196 @@ public class EditNodeWindow extends Stage {
     }
     
     private void handleCreateAtomicNode(String atomicNodeClass) {
+        if (!(currentNodeBuilder instanceof NodeGroupBuilder ngb)) {
+            showErrorAlert("Error", "Can only create nodes inside a NodeGroup.");
+            return;
+        }
         CreateAtomicNodeDialog dialog = new CreateAtomicNodeDialog(atomicNodeClass);
         dialog.showAndWait().ifPresent(result -> {
-            // TODO: Implement atomic node creation with NodeBuilder
-            System.out.println("Creating atomic node: " + atomicNodeClass + " with parameters: " + result);
-            
-            // Refresh visibility after adding new node
-            populateNodeVisibility();
-            updateCanvasVisibility();
+            try {
+                Map<String, Object> constructionParams = new HashMap<>(result);
+                CalculationNode newNode = NodeTypeRegistry.createNode(atomicNodeClass, constructionParams);
+                ngb.addNode(newNode);
+                refreshAfterStructuralChange();
+            } catch (Exception e) {
+                showErrorAlert("Node Creation Failed", "Failed to create " + atomicNodeClass + ": " + e.getMessage());
+                e.printStackTrace();
+            }
         });
     }
     
     private void handleCreateNodeGroup() {
         if (selectedNodeNames.size() < 2) return;
-        
-        // TODO: Implement NodeGroup creation dialog
+        if (!(currentNodeBuilder instanceof NodeGroupBuilder ngb)) return;
+
         TextInputDialog dialog = new TextInputDialog("NewGroup");
         dialog.setTitle("Create NodeGroup");
         dialog.setHeaderText("Create NodeGroup from selected nodes");
         dialog.setContentText("Enter group name:");
-        
+
         dialog.showAndWait().ifPresent(groupName -> {
-            // TODO: Implement NodeGroup creation with NodeBuilder
-            System.out.println("Creating NodeGroup: " + groupName + " with nodes: " + selectedNodeNames);
-            
-            // Clear selection and refresh
-            selectedNodeNames.clear();
-            updateCreateGroupButton();
-            populateNodeVisibility();
-            updateCanvasVisibility();
+            try {
+                // Collect the child nodes that were selected
+                Set<CalculationNode> selectedNodes = new HashSet<>();
+                for (CalculationNode node : ngb.nodes()) {
+                    if (selectedNodeNames.contains(node.name())) {
+                        selectedNodes.add(node);
+                    }
+                }
+
+                Set<String> selectedNames = selectedNodes.stream()
+                    .map(CalculationNode::name)
+                    .collect(java.util.stream.Collectors.toSet());
+
+                // Partition flywires: internal (both endpoints in selection) vs cross-boundary
+                Set<Flywire> internalFlywires = new HashSet<>();
+                Set<Flywire> crossBoundaryFlywires = new HashSet<>();
+                for (Flywire fw : ngb.flywires()) {
+                    String srcName = fw.source().nodePath().getFileName() != null
+                        ? fw.source().nodePath().getFileName().toString()
+                        : fw.source().nodePath().toString();
+                    String tgtName = fw.target().nodePath().getFileName() != null
+                        ? fw.target().nodePath().getFileName().toString()
+                        : fw.target().nodePath().toString();
+                    boolean srcIn = selectedNames.contains(srcName);
+                    boolean tgtIn = selectedNames.contains(tgtName);
+                    if (srcIn && tgtIn) {
+                        internalFlywires.add(fw);
+                    } else if (srcIn || tgtIn) {
+                        crossBoundaryFlywires.add(fw);
+                    }
+                }
+
+                // Remove selected nodes and their flywires from parent
+                ngb.deleteNodes(selectedNames);
+                for (Flywire fw : internalFlywires) {
+                    ngb.deleteFlywire(fw);
+                }
+                for (Flywire fw : crossBoundaryFlywires) {
+                    ngb.deleteFlywire(fw);
+                }
+
+                // Create the new NodeGroup with the selected nodes and internal flywires
+                NodeGroup newGroup = new NodeGroup(
+                    groupName,
+                    selectedNodes,
+                    internalFlywires,
+                    Exclude.of(Set.of())
+                );
+                ngb.addNode(newGroup);
+
+                if (!crossBoundaryFlywires.isEmpty()) {
+                    showErrorAlert("Warning",
+                        crossBoundaryFlywires.size() + " cross-boundary flywire(s) were removed during grouping. " +
+                        "You may need to recreate them manually.");
+                }
+
+                selectedNodeNames.clear();
+                updateCreateGroupButton();
+                refreshAfterStructuralChange();
+            } catch (Exception e) {
+                showErrorAlert("Group Creation Failed", "Failed to create NodeGroup: " + e.getMessage());
+                e.printStackTrace();
+            }
         });
     }
     
     private void handleAddFlywire() {
-        // TODO: Implement flywire creation dialog
-        System.out.println("Add flywire not yet implemented");
+        if (!(currentNodeBuilder instanceof NodeGroupBuilder ngb)) {
+            showErrorAlert("Error", "Can only add flywires inside a NodeGroup.");
+            return;
+        }
+        CreateFlywireDialog dialog = new CreateFlywireDialog(ngb.nodes());
+        dialog.showAndWait().ifPresent(flywire -> {
+            try {
+                ngb.addFlywire(flywire);
+                refreshAfterStructuralChange();
+            } catch (Exception e) {
+                showErrorAlert("Flywire Creation Failed",
+                    "Incompatible types: " + e.getMessage());
+            }
+        });
     }
     
     private void handleRemoveFlywire(Flywire flywire) {
         if (currentNodeBuilder instanceof NodeGroupBuilder ngb) {
-            // TODO: Implement flywire removal
-            System.out.println("Remove flywire: " + formatFlywireShort(flywire));
-            populateFlywires();
+            ngb.deleteFlywire(flywire);
+            refreshAfterStructuralChange();
         }
+    }
+
+    private void refreshAfterStructuralChange() {
+        updateRootNodeBuilderFromCurrent();
+        // Update the model in-place to preserve the navigation stack
+        editCanvasModel.updateNodeBuilder(currentNodeBuilder);
+        editCanvas.setEditModel(editCanvasModel);
+        initializeNodeVisibility();
+        populateNodeVisibility();
+        populateFlywires();
+        populateScope();
+        populateAtomicNodeOptions();
+        updateCanvasVisibility();
     }
     
     private void handleEditScope() {
-        // TODO: Implement scope editing dialog
-        System.out.println("Edit scope not yet implemented");
+        if (!(currentNodeBuilder instanceof NodeGroupBuilder ngb)) {
+            showErrorAlert("Error", "Can only edit scope of a NodeGroup.");
+            return;
+        }
+        EditScopeDialog dialog = new EditScopeDialog(ngb.nodes(), ngb.getExports());
+        dialog.showAndWait().ifPresent(newScope -> {
+            ngb.setExports(newScope);
+            refreshAfterStructuralChange();
+        });
     }
     
     private void navigateToPath(Path newPath) {
         try {
-            // Update current path
-            this.currentPath = newPath;
-            
-            // Navigate to the NodeBuilder for this path
-            this.currentNodeBuilder = navigateToNodeBuilder(rootNodeBuilder, newPath);
-            
-            // Update edit canvas model
+            // Walk from rootNodeBuilder using getChildBuilder() to reach the target.
+            // This avoids relying on the model's builder stack which can become stale
+            // after structural changes.
+            NodeBuilder targetBuilder = rootNodeBuilder;
+            Path targetPath = java.nio.file.Paths.get("/root");
+
+            String pathStr = newPath.toString();
+            if (pathStr.startsWith("/root/")) {
+                pathStr = pathStr.substring("/root/".length());
+            } else if (pathStr.startsWith("/root") || pathStr.equals("/")) {
+                pathStr = "";
+            } else if (pathStr.startsWith("/")) {
+                pathStr = pathStr.substring(1);
+            }
+
+            if (!pathStr.isEmpty()) {
+                for (String segment : pathStr.split("/")) {
+                    if (!segment.isEmpty() && targetBuilder instanceof NodeGroupBuilder ngb) {
+                        NodeBuilder child = ngb.getChildBuilder(segment);
+                        if (child != null) {
+                            targetBuilder = child;
+                            targetPath = targetPath.resolve(segment);
+                        }
+                    }
+                }
+            }
+
+            // Update our fields
+            this.currentNodeBuilder = targetBuilder;
+            this.currentPath = targetPath;
+
+            // Recreate model fresh at the target level (clean stack)
             editCanvasModel = new EditCanvasModel(currentNodeBuilder, currentPath);
+
+            // Refresh canvas
             editCanvas.setEditModel(editCanvasModel);
-            
-            // Update navigation bar
             navigationBar.setPathSegments(getPathSegments(currentPath));
-            
-            // Refresh all UI components
             initializeNodeVisibility();
             populateNodeVisibility();
             populateFlywires();
             populateScope();
-            
-            // Update window title
+            populateAtomicNodeOptions();
+            updateCanvasVisibility();
             setTitle("Edit Node: " + currentPath);
-            
+
         } catch (Exception e) {
             showErrorAlert("Navigation Error", "Failed to navigate to path: " + e.getMessage());
             e.printStackTrace();
