@@ -1,6 +1,7 @@
 package me.vincentzz.visual.model;
 
 import me.vincentzz.graph.model.ResourceIdentifier;
+import me.vincentzz.lang.PathUtils;
 
 import java.nio.file.Path;
 
@@ -109,9 +110,9 @@ public class ConnectionViewModel {
     }
     
     private String getNodeName(Path path) {
-        return path.getFileName() != null ? 
-               path.getFileName().toString() : 
-               path.toString();
+        return path.getFileName() != null ?
+               path.getFileName().toString() :
+               PathUtils.toUnixString(path);
     }
     
     private String getResourceDescription(ResourceIdentifier resource) {

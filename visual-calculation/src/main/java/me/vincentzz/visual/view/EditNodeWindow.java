@@ -28,6 +28,7 @@ import me.vincentzz.graph.json.ConstructionalJsonUtil;
 import me.vincentzz.graph.json.NodeTypeRegistry;
 import me.vincentzz.visual.model.EditCanvasModel;
 import me.vincentzz.visual.model.NodeViewModel;
+import me.vincentzz.lang.PathUtils;
 import me.vincentzz.visual.util.ColorScheme;
 
 import java.nio.file.Path;
@@ -135,7 +136,8 @@ public class EditNodeWindow extends Stage {
 
             // Navigate to current path using real child builder references (not copies)
             this.currentNodeBuilder = rootNodeBuilder;
-            String pathStr = currentPath.toString();
+            // Normalize path separators for cross-platform compatibility (Windows uses \, Mac uses /)
+            String pathStr = PathUtils.toUnixString(currentPath);
             if (pathStr.startsWith("/root/")) {
                 pathStr = pathStr.substring("/root/".length());
             } else if (pathStr.startsWith("/root") || pathStr.equals("/")) {
@@ -160,15 +162,17 @@ public class EditNodeWindow extends Stage {
     }
     
     private NodeBuilder navigateToNodeBuilder(NodeBuilder builder, Path targetPath) {
-        if (targetPath.toString().equals("/") || targetPath.toString().equals("/root")) {
+        // Normalize path separators for cross-platform compatibility (Windows uses \, Mac uses /)
+        String normalizedPath = PathUtils.toUnixString(targetPath);
+        if (normalizedPath.equals("/") || normalizedPath.equals("/root")) {
             return builder;
         }
-        
+
         // Navigate through the path segments to find the target NodeBuilder
         NodeBuilder currentBuilder = builder;
-        
+
         // Split the path into segments (skip root)
-        String pathStr = targetPath.toString();
+        String pathStr = normalizedPath;
         if (pathStr.startsWith("/root/")) {
             pathStr = pathStr.substring("/root/".length());
         } else if (pathStr.startsWith("/")) {
@@ -184,8 +188,6 @@ public class EditNodeWindow extends Stage {
         for (String segment : segments) {
             if (segment.isEmpty()) continue;
             
-            System.out.println("DEBUG: Navigating to segment '" + segment + "' from current builder");
-            
             // Find the child NodeBuilder for this segment
             NodeBuilder childBuilder = findChildNodeBuilder(currentBuilder, segment);
             if (childBuilder == null) {
@@ -195,7 +197,6 @@ public class EditNodeWindow extends Stage {
                 return currentBuilder;
             }
             
-            System.out.println("DEBUG: Successfully navigated to segment '" + segment + "'");
             currentBuilder = childBuilder;
         }
         
@@ -208,34 +209,23 @@ public class EditNodeWindow extends Stage {
      */
     private NodeBuilder findChildNodeBuilder(NodeBuilder parentBuilder, String childName) {
         if (!(parentBuilder instanceof NodeGroupBuilder ngb)) {
-            System.err.println("DEBUG: Parent builder is not a NodeGroupBuilder, cannot navigate to child '" + childName + "'");
             return null; // Can't navigate into non-NodeGroup builders
         }
         
         try {
-            System.out.println("DEBUG: Looking for child '" + childName + "' in NodeGroupBuilder");
-            
             // Get the child nodes from the NodeGroupBuilder
             Set<CalculationNode> childNodes = ngb.nodes();
-            System.out.println("DEBUG: Found " + childNodes.size() + " child nodes");
             
             // Find the child node with the matching name
             for (CalculationNode childNode : childNodes) {
                 String nodeName = childNode.name();
-                System.out.println("DEBUG: Checking child node: " + nodeName);
                 
                 if (nodeName.equals(childName)) {
-                    System.out.println("DEBUG: Found matching child node: " + nodeName);
-                    
                     // Convert the child node back to a NodeBuilder
                     NodeBuilder childBuilder = NodeBuilder.fromNode(childNode);
-                    System.out.println("DEBUG: Successfully created NodeBuilder for child: " + nodeName);
                     return childBuilder;
                 }
             }
-            
-            System.err.println("DEBUG: Child '" + childName + "' not found among available children: " + 
-                              childNodes.stream().map(CalculationNode::name).collect(java.util.stream.Collectors.toList()));
             
         } catch (Exception e) {
             System.err.println("ERROR: Exception while finding child NodeBuilder for '" + childName + "': " + e.getMessage());
@@ -366,8 +356,6 @@ public class EditNodeWindow extends Stage {
      * Update canvas visibility by filtering nodes and connections.
      */
     private void updateCanvasVisibility() {
-        System.out.println("DEBUG: Updating canvas visibility. Visible nodes: " + visibleNodeNames);
-        
         // Get all nodes from model
         var allNodes = editCanvasModel.getNodes();
         var allConnections = editCanvasModel.getConnections();
@@ -383,12 +371,12 @@ public class EditNodeWindow extends Stage {
         // Filter connections to only show those between visible nodes
         List<me.vincentzz.visual.model.ConnectionViewModel> visibleConnections = new ArrayList<>();
         for (var connection : allConnections) {
-            String sourceName = connection.getSourcePath().getFileName() != null ? 
-                               connection.getSourcePath().getFileName().toString() : 
-                               connection.getSourcePath().toString();
-            String targetName = connection.getTargetPath().getFileName() != null ? 
-                               connection.getTargetPath().getFileName().toString() : 
-                               connection.getTargetPath().toString();
+            String sourceName = connection.getSourcePath().getFileName() != null ?
+                               connection.getSourcePath().getFileName().toString() :
+                               PathUtils.toUnixString(connection.getSourcePath());
+            String targetName = connection.getTargetPath().getFileName() != null ?
+                               connection.getTargetPath().getFileName().toString() :
+                               PathUtils.toUnixString(connection.getTargetPath());
             
             if (visibleNodeNames.contains(sourceName) && visibleNodeNames.contains(targetName)) {
                 visibleConnections.add(connection);
@@ -399,13 +387,11 @@ public class EditNodeWindow extends Stage {
         editCanvas.setNodes(visibleNodes);
         editCanvas.setConnections(visibleConnections);
         editCanvas.refresh();
-        
-        System.out.println("DEBUG: Applied visibility filter. Showing " + visibleNodes.size() + " out of " + allNodes.size() + " nodes");
     }
     
     private List<String> getPathSegments(Path path) {
         List<String> segments = new ArrayList<>();
-        if (path.toString().equals("/") || path.toString().equals("/root")) {
+        if (PathUtils.toUnixString(path).equals("/") || PathUtils.toUnixString(path).equals("/root")) {
             segments.add("root");
         } else {
             segments.add("root");
@@ -585,15 +571,15 @@ public class EditNodeWindow extends Stage {
             // Populate with raw JSON data (using the ObjectMapper directly)
             var objectMapper = ConstructionalJsonUtil.getObjectMapper();
             snapshotArea.setText(objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(snapshot));
-            requestPathArea.setText(requestedNodePath.toString());
-            
+            requestPathArea.setText(PathUtils.toUnixString(requestedNodePath));
+
             // Populate requested resources as JSON array
             if (requestedResources != null && !requestedResources.isEmpty()) {
                 requestedResourcesArea.setText(objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(requestedResources));
             } else {
                 requestedResourcesArea.setText("[]");
             }
-            
+
             if (adhocOverride.isPresent()) {
                 adhocOverrideArea.setText(objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(adhocOverride.get()));
             } else {
@@ -601,7 +587,7 @@ public class EditNodeWindow extends Stage {
             }
         } catch (Exception e) {
             snapshotArea.setText("Error loading snapshot: " + e.getMessage());
-            requestPathArea.setText(requestedNodePath.toString());
+            requestPathArea.setText(PathUtils.toUnixString(requestedNodePath));
             requestedResourcesArea.setText("[]");
             adhocOverrideArea.setText("{}");
         }
@@ -791,8 +777,8 @@ public class EditNodeWindow extends Stage {
     // Event handlers
     
     private void handleNodeClick(Path nodePath) {
-        String nodeName = nodePath.getFileName() != null ? 
-                         nodePath.getFileName().toString() : nodePath.toString();
+        String nodeName = nodePath.getFileName() != null ?
+                         nodePath.getFileName().toString() : PathUtils.toUnixString(nodePath);
         
         // Find the clicked node
         NodeViewModel clickedNode = findNodeByName(nodeName);
@@ -820,8 +806,8 @@ public class EditNodeWindow extends Stage {
      * Handle node click with mouse event information for Ctrl+click support.
      */
     private void handleNodeClickWithEvent(Path nodePath, boolean isCtrlDown) {
-        String nodeName = nodePath.getFileName() != null ? 
-                         nodePath.getFileName().toString() : nodePath.toString();
+        String nodeName = nodePath.getFileName() != null ?
+                         nodePath.getFileName().toString() : PathUtils.toUnixString(nodePath);
         
         // Find the clicked node
         NodeViewModel clickedNode = findNodeByName(nodeName);
@@ -896,8 +882,6 @@ public class EditNodeWindow extends Stage {
             populateScope();
             populateAtomicNodeOptions();
 
-            System.out.println("DEBUG: Refreshed EditNodeWindow with updated NodeBuilder after structural change");
-
         } catch (Exception e) {
             System.err.println("ERROR: Failed to handle structural change: " + e.getMessage());
             e.printStackTrace();
@@ -931,7 +915,7 @@ public class EditNodeWindow extends Stage {
     private NodeBuilder rebuildRootFromUpdatedNode(CalculationNode updatedCurrentNode) {
         try {
             // If we're at root, the updated node IS the root
-            if (currentPath.toString().equals("/") || currentPath.toString().equals("/root")) {
+            if (PathUtils.toUnixString(currentPath).equals("/") || PathUtils.toUnixString(currentPath).equals("/root")) {
                 return NodeBuilder.fromNode(updatedCurrentNode);
             }
             
@@ -958,24 +942,24 @@ public class EditNodeWindow extends Stage {
      * Enhanced to handle multi-layer grouping properly.
      */
     private CalculationNode replaceNodeAtPath(CalculationNode rootNode, Path targetPath, CalculationNode replacementNode) {
-        System.out.println("DEBUG: Replacing node at path: " + targetPath + " with: " + replacementNode.name());
-        
+        // Normalize path separators for cross-platform compatibility (Windows uses \, Mac uses /)
+        String normalizedTargetPath = PathUtils.toUnixString(targetPath);
+
         // If we're at root, return the replacement node
-        if (targetPath.toString().equals("/") || targetPath.toString().equals("/root")) {
-            System.out.println("DEBUG: Target path is root, returning replacement node");
+        if (normalizedTargetPath.equals("/") || normalizedTargetPath.equals("/root")) {
             return replacementNode;
         }
-        
+
         // For non-root paths, we need to traverse and reconstruct the hierarchy
         if (!(rootNode instanceof NodeGroup)) {
             System.err.println("ERROR: Root node is not a NodeGroup, cannot replace nested node");
             return replacementNode; // Fallback
         }
-        
+
         NodeGroup rootGroup = (NodeGroup) rootNode;
-        
+
         // Parse the target path to get segments
-        String pathStr = targetPath.toString();
+        String pathStr = normalizedTargetPath;
         if (pathStr.startsWith("/root/")) {
             pathStr = pathStr.substring("/root/".length());
         } else if (pathStr.startsWith("/")) {
@@ -991,13 +975,11 @@ public class EditNodeWindow extends Stage {
         // If there's only one segment, replace directly in the root group
         if (segments.length == 1) {
             String targetNodeName = segments[0];
-            System.out.println("DEBUG: Replacing direct child '" + targetNodeName + "' in root group");
             
             return replaceChildInNodeGroup(rootGroup, targetNodeName, replacementNode);
         }
         
         // For multiple segments, we need to navigate deeper
-        System.out.println("DEBUG: Multi-segment path, navigating deeper: " + java.util.Arrays.toString(segments));
         
         // Navigate to the parent of the target node and replace the child
         String firstSegment = segments[0];
@@ -1010,7 +992,6 @@ public class EditNodeWindow extends Stage {
         
         for (CalculationNode child : rootGroup.nodes()) {
             if (child.name().equals(firstSegment)) {
-                System.out.println("DEBUG: Found child '" + firstSegment + "', recursively replacing within it");
                 CalculationNode updatedChild = replaceNodeAtPath(child, remainingPath, replacementNode);
                 updatedChildren.add(updatedChild);
                 foundChild = true;
@@ -1042,7 +1023,6 @@ public class EditNodeWindow extends Stage {
         
         for (CalculationNode child : parentGroup.nodes()) {
             if (child.name().equals(childName)) {
-                System.out.println("DEBUG: Replacing child '" + childName + "' with '" + replacementChild.name() + "'");
                 updatedChildren.add(replacementChild);
                 foundChild = true;
             } else {
@@ -1074,8 +1054,8 @@ public class EditNodeWindow extends Stage {
     private void handleMultipleNodesSelected(Set<Path> nodePaths) {
         selectedNodeNames.clear();
         for (Path path : nodePaths) {
-            String nodeName = path.getFileName() != null ? 
-                             path.getFileName().toString() : path.toString();
+            String nodeName = path.getFileName() != null ?
+                             path.getFileName().toString() : PathUtils.toUnixString(path);
             selectedNodeNames.add(nodeName);
         }
         updateCreateGroupButton();
@@ -1237,7 +1217,8 @@ public class EditNodeWindow extends Stage {
             NodeBuilder targetBuilder = rootNodeBuilder;
             Path targetPath = java.nio.file.Paths.get("/root");
 
-            String pathStr = newPath.toString();
+            // Normalize path separators for cross-platform compatibility (Windows uses \, Mac uses /)
+            String pathStr = PathUtils.toUnixString(newPath);
             if (pathStr.startsWith("/root/")) {
                 pathStr = pathStr.substring("/root/".length());
             } else if (pathStr.startsWith("/root") || pathStr.equals("/")) {
@@ -1348,7 +1329,6 @@ public class EditNodeWindow extends Stage {
                 alert.setContentText("Graph exported successfully to: " + file.getAbsolutePath());
                 alert.showAndWait();
                 
-                System.out.println("DEBUG: Successfully exported graph to: " + file.getAbsolutePath());
             }
             
         } catch (Exception e) {
@@ -1380,7 +1360,6 @@ public class EditNodeWindow extends Stage {
                     // Parse as JSON array of ResourceIdentifiers
                     var typeRef = new com.fasterxml.jackson.core.type.TypeReference<Set<me.vincentzz.graph.model.ResourceIdentifier>>() {};
                     modifiedRequestedResources = objectMapper.readValue(requestedResourcesText, typeRef);
-                    System.out.println("DEBUG: Parsed " + modifiedRequestedResources.size() + " requested resources from text area");
                 } catch (Exception e) {
                     System.err.println("ERROR: Failed to parse requested resources, using empty set: " + e.getMessage());
                     modifiedRequestedResources = Set.of();
@@ -1543,8 +1522,6 @@ public class EditNodeWindow extends Stage {
             initializeNodeVisibility();
             populateNodeVisibility();
             updateCanvasVisibility();
-            
-            System.out.println("DEBUG: Successfully reset EditNodeWindow to original state");
             
         } catch (Exception e) {
             System.err.println("ERROR: Failed to reset to original state: " + e.getMessage());

@@ -55,9 +55,7 @@ public class AdhocOverrideJsonSerializer extends JsonSerializer<AdhocOverride> {
         // Serialize adhocFlywires as array of properly serialized Flywire objects
         gen.writeFieldName("adhocFlywires");
         gen.writeStartArray();
-        System.err.println("DEBUG ADHOC: Serializing " + adhocOverride.adhocFlywires().size() + " adhoc flywires");
         for (me.vincentzz.graph.node.Flywire flywire : adhocOverride.adhocFlywires()) {
-            System.err.println("DEBUG ADHOC: Serializing flywire: " + flywire);
             serializers.findValueSerializer(me.vincentzz.graph.node.Flywire.class).serialize(flywire, gen, serializers);
         }
         gen.writeEndArray();

@@ -10,6 +10,7 @@ import me.vincentzz.graph.model.EvaluationResult;
 import me.vincentzz.graph.model.ResourceIdentifier;
 import me.vincentzz.graph.node.ConnectionPoint;
 import me.vincentzz.graph.node.Flywire;
+import me.vincentzz.lang.PathUtils;
 import me.vincentzz.lang.Result.Result;
 import me.vincentzz.visual.util.ColorScheme;
 
@@ -150,7 +151,7 @@ public class InfoDisplayPane extends VBox {
     
     private void updateRequestPath() {
         Path requestedPath = evaluationResult.requestedNodePath();
-        requestPathLabel.setText(requestedPath != null ? requestedPath.toString() : "Unknown");
+        requestPathLabel.setText(requestedPath != null ? PathUtils.toUnixString(requestedPath) : "Unknown");
     }
     
     private void updateAdhocOverrides() {
@@ -158,7 +159,7 @@ public class InfoDisplayPane extends VBox {
         
         // Add requested node path at the top of the left pane
         Path requestedPath = evaluationResult.requestedNodePath();
-        sb.append("Requested Node Path: ").append(requestedPath != null ? requestedPath.toString() : "Unknown").append("\n\n");
+        sb.append("Requested Node Path: ").append(requestedPath != null ? PathUtils.toUnixString(requestedPath) : "Unknown").append("\n\n");
         
         // Add requested resource IDs section
         sb.append("Requested Resource IDs:\n");
@@ -293,7 +294,7 @@ public class InfoDisplayPane extends VBox {
     
     private String formatConnectionPointInline(ConnectionPoint cp) {
         // Format connection point on a single line for flywire display
-        return cp.nodePath().toString();
+        return PathUtils.toUnixString(cp.nodePath());
     }
     
     private String formatResourceIdentifier(ResourceIdentifier rid) {

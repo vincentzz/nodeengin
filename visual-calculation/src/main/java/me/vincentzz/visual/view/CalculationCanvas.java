@@ -21,6 +21,7 @@ import me.vincentzz.graph.model.EvaluationResult;
 import me.vincentzz.graph.model.ResourceIdentifier;
 import me.vincentzz.graph.model.input.InputSourceType;
 import me.vincentzz.graph.model.output.OutputValueType;
+import me.vincentzz.lang.PathUtils;
 import me.vincentzz.lang.Result.Failure;
 import me.vincentzz.lang.Result.Result;
 import me.vincentzz.lang.Result.Success;
@@ -439,10 +440,8 @@ public class CalculationCanvas extends ScrollPane {
         if (x >= groupButtonX && x <= groupButtonX + buttonWidth && 
             y >= buttonY && y <= buttonY + buttonHeight) {
             if (canGroup) {
-                System.out.println("DEBUG: Group button clicked with " + selectedCount + " selected nodes");
                 handleGroupNodes(selectedNodes);
             } else {
-                System.out.println("DEBUG: Group button clicked but cannot group (selected: " + selectedCount + ")");
             }
             return;
         }
@@ -451,10 +450,8 @@ public class CalculationCanvas extends ScrollPane {
         if (x >= ungroupButtonX && x <= ungroupButtonX + buttonWidth && 
             y >= buttonY && y <= buttonY + buttonHeight) {
             if (canUngroup) {
-                System.out.println("DEBUG: Ungroup button clicked");
                 handleUngroupNode(selectedNodes.get(0));
             } else {
-                System.out.println("DEBUG: Ungroup button clicked but cannot ungroup");
             }
             return;
         }
@@ -462,7 +459,6 @@ public class CalculationCanvas extends ScrollPane {
         // Check Reset button click
         if (x >= resetButtonX && x <= resetButtonX + buttonWidth && 
             y >= buttonY && y <= buttonY + buttonHeight) {
-            System.out.println("DEBUG: Reset button clicked");
             handleResetChanges();
             return;
         }
@@ -493,8 +489,6 @@ public class CalculationCanvas extends ScrollPane {
                     .map(NodeViewModel::getDisplayName)
                     .collect(java.util.stream.Collectors.toList());
                 
-                System.out.println("DEBUG: Grouping nodes: " + selectedNodeNames + " into group: " + groupName);
-                
                 // Implement grouping using available NodeGroupBuilder methods
                 createNodeGroup(currentGroupBuilder, groupName, selectedNodeNames);
                 
@@ -508,8 +502,6 @@ public class CalculationCanvas extends ScrollPane {
                 if (onStructuralChange != null) {
                     onStructuralChange.run();
                 }
-                
-                System.out.println("DEBUG: Successfully created NodeGroup: " + groupName);
                 
             } catch (Exception e) {
                 System.err.println("ERROR: Failed to create NodeGroup: " + e.getMessage());
@@ -534,8 +526,6 @@ public class CalculationCanvas extends ScrollPane {
             
             String nodeGroupName = nodeGroupToUngroup.getDisplayName();
             
-            System.out.println("DEBUG: Ungrouping NodeGroup: " + nodeGroupName);
-            
             // Implement ungrouping using available NodeGroupBuilder methods
             ungroupNode(currentGroupBuilder, nodeGroupName);
             
@@ -550,8 +540,6 @@ public class CalculationCanvas extends ScrollPane {
                 onStructuralChange.run();
             }
             
-            System.out.println("DEBUG: Successfully ungrouped NodeGroup: " + nodeGroupName);
-            
         } catch (Exception e) {
             System.err.println("ERROR: Failed to ungroup NodeGroup: " + e.getMessage());
             e.printStackTrace();
@@ -565,8 +553,6 @@ public class CalculationCanvas extends ScrollPane {
      */
     private void createNodeGroup(me.vincentzz.graph.node.builder.NodeGroupBuilder parentBuilder, 
                                 String groupName, List<String> nodeNames) {
-        System.out.println("DEBUG: Creating NodeGroup '" + groupName + "' from nodes: " + nodeNames);
-        
         // Get the current nodes to find the selected ones
         Set<me.vincentzz.graph.node.CalculationNode> allNodes = parentBuilder.nodes();
         Set<me.vincentzz.graph.node.CalculationNode> selectedNodes = new HashSet<>();
@@ -575,7 +561,6 @@ public class CalculationCanvas extends ScrollPane {
         for (me.vincentzz.graph.node.CalculationNode node : allNodes) {
             if (nodeNames.contains(node.name())) {
                 selectedNodes.add(node);
-                System.out.println("DEBUG: Found selected node: " + node.name());
             }
         }
         
@@ -583,14 +568,10 @@ public class CalculationCanvas extends ScrollPane {
             throw new RuntimeException("No nodes found to group");
         }
         
-        System.out.println("DEBUG: Selected " + selectedNodes.size() + " nodes for grouping");
-        
         // Get existing flywires to analyze connections
         Set<me.vincentzz.graph.node.Flywire> existingFlywires = parentBuilder.flywires();
         Set<me.vincentzz.graph.node.Flywire> internalFlywires = new HashSet<>();
         Set<me.vincentzz.graph.node.Flywire> externalFlywires = new HashSet<>();
-        
-        System.out.println("DEBUG: Analyzing " + existingFlywires.size() + " existing flywires");
         
         // Categorize flywires as internal (within group) or external (crossing group boundary)
         for (me.vincentzz.graph.node.Flywire flywire : existingFlywires) {
@@ -603,11 +584,9 @@ public class CalculationCanvas extends ScrollPane {
             if (sourceInGroup && targetInGroup) {
                 // Both source and target are in the group - internal flywire
                 internalFlywires.add(flywire);
-                System.out.println("DEBUG: Internal flywire: " + sourceName + " -> " + targetName);
             } else if (sourceInGroup || targetInGroup) {
                 // One end is in the group, one is outside - external flywire (needs special handling)
                 externalFlywires.add(flywire);
-                System.out.println("DEBUG: External flywire: " + sourceName + " -> " + targetName);
             }
         }
         
@@ -617,8 +596,6 @@ public class CalculationCanvas extends ScrollPane {
         me.vincentzz.graph.scope.Exclude<me.vincentzz.graph.node.ConnectionPoint> excludeScope = 
             new me.vincentzz.graph.scope.Exclude<>(emptyExcludeSet);
         
-        System.out.println("DEBUG: Group will use empty Exclude scope (exports all nested node outputs)");
-        
         // Create the new NodeGroup
         me.vincentzz.graph.node.NodeGroup newGroup = new me.vincentzz.graph.node.NodeGroup(
             groupName,
@@ -627,17 +604,11 @@ public class CalculationCanvas extends ScrollPane {
             excludeScope
         );
         
-        System.out.println("DEBUG: Created NodeGroup with " + selectedNodes.size() + " nodes, " + 
-                          internalFlywires.size() + " internal flywires");
-        
         // Now update the parent builder using the correct API
         
         // 1. Remove internal flywires first (they're now inside the group)
         for (me.vincentzz.graph.node.Flywire flywire : internalFlywires) {
             parentBuilder.deleteFlywire(flywire);
-            System.out.println("DEBUG: Removed internal flywire: " + 
-                              getNodeNameFromPath(flywire.source().nodePath()) + " -> " + 
-                              getNodeNameFromPath(flywire.target().nodePath()));
         }
         
         // 2. Update external flywires to point to the new group
@@ -671,23 +642,16 @@ public class CalculationCanvas extends ScrollPane {
             }
             
             parentBuilder.addFlywire(newFlywire);
-            System.out.println("DEBUG: Updated external flywire to use group: " + 
-                              getNodeNameFromPath(newFlywire.source().nodePath()) + " -> " + 
-                              getNodeNameFromPath(newFlywire.target().nodePath()));
         }
         
         // 3. Remove the selected nodes from the parent builder (AFTER updating flywires)
         // Use individual deleteNode calls since deleteNodes() doesn't exist
         for (String nodeName : nodeNames) {
             parentBuilder.deleteNode(nodeName);
-            System.out.println("DEBUG: Removed node: " + nodeName);
         }
         
         // 4. Add the new group to the parent builder
         parentBuilder.addNode(newGroup);
-        System.out.println("DEBUG: Added new NodeGroup '" + groupName + "' to parent");
-        
-        System.out.println("DEBUG: Successfully created NodeGroup '" + groupName + "' with proper connections");
     }
     
     /**
@@ -697,7 +661,7 @@ public class CalculationCanvas extends ScrollPane {
         if (nodePath.getFileName() != null) {
             return nodePath.getFileName().toString();
         } else {
-            String pathStr = nodePath.toString();
+            String pathStr = PathUtils.toUnixString(nodePath);
             if (pathStr.startsWith("/")) {
                 pathStr = pathStr.substring(1);
             }
@@ -710,8 +674,6 @@ public class CalculationCanvas extends ScrollPane {
      */
     private void ungroupNode(me.vincentzz.graph.node.builder.NodeGroupBuilder parentBuilder, 
                             String nodeGroupName) {
-        System.out.println("DEBUG: Ungrouping NodeGroup: " + nodeGroupName);
-        
         // Get the current nodes to find the NodeGroup to ungroup
         Set<me.vincentzz.graph.node.CalculationNode> allNodes = parentBuilder.nodes();
         me.vincentzz.graph.node.NodeGroup nodeGroupToUngroup = null;
@@ -728,28 +690,18 @@ public class CalculationCanvas extends ScrollPane {
             throw new RuntimeException("NodeGroup '" + nodeGroupName + "' not found");
         }
         
-        System.out.println("DEBUG: Found NodeGroup to ungroup: " + nodeGroupName);
-        
         // Get the child nodes and flywires from the NodeGroup
         Set<me.vincentzz.graph.node.CalculationNode> childNodes = nodeGroupToUngroup.nodes();
         Set<me.vincentzz.graph.node.Flywire> childFlywires = nodeGroupToUngroup.flywires();
         
-        System.out.println("DEBUG: NodeGroup contains " + childNodes.size() + " nodes and " + 
-                          childFlywires.size() + " flywires");
-        
         // Remove the NodeGroup from the parent builder first
         parentBuilder.deleteNode(nodeGroupName);
-        System.out.println("DEBUG: Removed NodeGroup from parent");
-        
+
         // Add the child nodes to the parent builder using addNodes method
         parentBuilder.addNodes(childNodes);
-        System.out.println("DEBUG: Added " + childNodes.size() + " child nodes to parent");
-        
+
         // Add the child flywires to the parent builder using addFlywires method
         parentBuilder.addFlywires(childFlywires);
-        System.out.println("DEBUG: Added " + childFlywires.size() + " child flywires to parent");
-        
-        System.out.println("DEBUG: Successfully ungrouped NodeGroup: " + nodeGroupName);
     }
     
     /**
@@ -773,7 +725,6 @@ public class CalculationCanvas extends ScrollPane {
                             // This requires coordination with EditNodeWindow to provide the original graph
                             resetToOriginalState();
                             
-                            System.out.println("DEBUG: Successfully reset all changes to original state");
                         }
                     } catch (Exception e) {
                         System.err.println("ERROR: Failed to reset changes: " + e.getMessage());
@@ -822,7 +773,6 @@ public class CalculationCanvas extends ScrollPane {
      */
     private void handleEditScope() {
         // TODO: Implement scope editing dialog
-        System.out.println("DEBUG: Edit scope functionality not yet implemented");
         showInfoAlert("Edit Scope", "Scope editing functionality will be implemented in a future update.");
     }
     
@@ -930,8 +880,6 @@ public class CalculationCanvas extends ScrollPane {
     private void handleCtrlNodeClick(NodeViewModel clickedNode) {
         boolean wasSelected = clickedNode.isSelected();
         clickedNode.setSelected(!wasSelected);
-        System.out.println("DEBUG: Ctrl+clicked node " + clickedNode.getDisplayName() + 
-                          ", was selected: " + wasSelected + ", now selected: " + clickedNode.isSelected());
     }
     
     /**
@@ -942,8 +890,6 @@ public class CalculationCanvas extends ScrollPane {
         clearAllNodeSelections();
         // Select only the clicked node
         clickedNode.setSelected(true);
-        System.out.println("DEBUG: Regular clicked node " + clickedNode.getDisplayName() + 
-                          ", now selected: " + clickedNode.isSelected());
     }
     
     /**
@@ -1599,9 +1545,9 @@ public class CalculationCanvas extends ScrollPane {
     }
     
     private NodeViewModel findNodeByPath(Path path) {
-        String normalized = path.toString().replace('\\', '/');
+        String normalized = PathUtils.toUnixString(path);
         return nodes.stream()
-                   .filter(node -> node.getNodePath().toString().replace('\\', '/').equals(normalized))
+                   .filter(node -> PathUtils.toUnixString(node.getNodePath()).equals(normalized))
                    .findFirst()
                    .orElse(null);
     }
@@ -1960,12 +1906,6 @@ public class CalculationCanvas extends ScrollPane {
         Color borderColor = node.isSelected() ? 
             ColorScheme.NODE_SELECTED : ColorScheme.NODE_BORDER;
         
-        // Debug output for selection
-        if (node.isSelected()) {
-            System.out.println("DEBUG: Rendering selected node " + node.getDisplayName() + 
-                              " with border color: " + borderColor);
-        }
-        
         // Draw node background
         gc.setFill(backgroundColor);
         gc.fillRoundRect(x, y, width, height, 8, 8);
@@ -2121,9 +2061,9 @@ public class CalculationCanvas extends ScrollPane {
                 // For NodeGroups, the output may be produced by a child node.
                 // Search child node evaluations for this resource.
                 if (node.isNodeGroup()) {
-                    String nodePathStr = node.getNodePath().toString().replace('\\', '/');
+                    String nodePathStr = PathUtils.toUnixString(node.getNodePath());
                     for (var entry : model.getEvaluationResult().nodeEvaluationMap().entrySet()) {
-                        String candidateStr = entry.getKey().toString().replace('\\', '/');
+                        String candidateStr = PathUtils.toUnixString(entry.getKey());
                         if (candidateStr.startsWith(nodePathStr + "/")) {
                             var childOutput = entry.getValue().outputs().get(resource);
                             if (childOutput != null) {
@@ -2209,8 +2149,6 @@ public class CalculationCanvas extends ScrollPane {
             var topLevelResults = model.getEvaluationResult().results();
             if (topLevelResults.containsKey(resource)) {
                 boolean isSuccess = isResultSuccessful(topLevelResults.get(resource));
-                System.out.println("DEBUG: Path " + (isInput ? "input" : "output") + " " + resource + 
-                                 " found in top-level results: " + (isSuccess ? "SUCCESS" : "FAILURE"));
                 return isSuccess;
             }
             
@@ -2222,8 +2160,6 @@ public class CalculationCanvas extends ScrollPane {
                     var inputResult = nodeEvaluation.inputs().get(resource);
                     if (inputResult != null) {
                         boolean isSuccess = isResultSuccessful(inputResult.value());
-                        System.out.println("DEBUG: Path input " + resource + 
-                                         " found in current path inputs: " + (isSuccess ? "SUCCESS" : "FAILURE"));
                         return isSuccess;
                     }
                 } else {
@@ -2231,8 +2167,6 @@ public class CalculationCanvas extends ScrollPane {
                     var outputResult = nodeEvaluation.outputs().get(resource);
                     if (outputResult != null) {
                         boolean isSuccess = isResultSuccessful(outputResult.value());
-                        System.out.println("DEBUG: Path output " + resource + 
-                                         " found in current path outputs: " + (isSuccess ? "SUCCESS" : "FAILURE"));
                         return isSuccess;
                     }
                 }
@@ -2246,15 +2180,11 @@ public class CalculationCanvas extends ScrollPane {
                 if (!isInput && evaluation.outputs().containsKey(resource)) {
                     // Found the resource as an output in some node
                     boolean isSuccess = isResultSuccessful(evaluation.outputs().get(resource).value());
-                    System.out.println("DEBUG: Path output " + resource + 
-                                     " found in node " + pathKey + " outputs: " + (isSuccess ? "SUCCESS" : "FAILURE"));
                     return isSuccess;
                 }
             }
             
             // If no result found anywhere, this means the resource is unfulfilled/uncomputed
-            System.out.println("DEBUG: Path " + (isInput ? "input" : "output") + " " + resource + 
-                             " NOT FOUND anywhere - returning FAILURE");
             return false;
             
         } catch (Exception e) {
@@ -2324,9 +2254,9 @@ public class CalculationCanvas extends ScrollPane {
         }
         
         try {
-            String currentPathStr = currentPath.toString();
+            String currentPathStr = PathUtils.toUnixString(currentPath);
             var graph = model.getEvaluationResult().graph();
-            
+
             // Extract actual inputs by calling inputs() on CalculationNode objects
             var inputs = extractInputsFromCalculationNode(graph, currentPathStr);
             
@@ -2363,9 +2293,9 @@ public class CalculationCanvas extends ScrollPane {
         }
         
         try {
-            String currentPathStr = currentPath.toString();
+            String currentPathStr = PathUtils.toUnixString(currentPath);
             var graph = model.getEvaluationResult().graph();
-            
+
             // Extract actual outputs by calling outputs() on CalculationNode objects
             var outputs = extractOutputsFromCalculationNode(graph, currentPathStr);
             
@@ -2614,7 +2544,7 @@ public class CalculationCanvas extends ScrollPane {
      * Get the current path as a string for comparison.
      */
     private String getCurrentPathString() {
-        return currentPath != null ? currentPath.toString() : "/root";
+        return currentPath != null ? PathUtils.toUnixString(currentPath) : "/root";
     }
     
     /**
@@ -3317,9 +3247,9 @@ public class CalculationCanvas extends ScrollPane {
      * Get display name for a node path.
      */
     private String getNodeDisplayName(java.nio.file.Path nodePath) {
-        return nodePath.getFileName() != null ? 
-               nodePath.getFileName().toString() : 
-               nodePath.toString();
+        return nodePath.getFileName() != null ?
+               nodePath.getFileName().toString() :
+               PathUtils.toUnixString(nodePath);
     }
     
     /**
@@ -3604,9 +3534,9 @@ public class CalculationCanvas extends ScrollPane {
         }
         
         try {
-            String currentPathStr = currentPath.toString();
+            String currentPathStr = PathUtils.toUnixString(currentPath);
             var graph = model.getEvaluationResult().graph();
-            
+
             // Extract actual flywire information by calling flywires() on NodeGroup objects
             var flywires = extractFlywireFromNodeGroup(graph, currentPathStr);
             
@@ -3614,11 +3544,11 @@ public class CalculationCanvas extends ScrollPane {
                 for (var flywire : flywires) {
                     // Create detailed flywire information
                     flywireInfo.add("SOURCE:");
-                    flywireInfo.add("  Path: " + flywire.source().nodePath().toString());
+                    flywireInfo.add("  Path: " + PathUtils.toUnixString(flywire.source().nodePath()));
                     flywireInfo.add("  Resource: " + formatResourceDetails(flywire.source().rid()));
-                    
+
                     flywireInfo.add("TARGET:");
-                    flywireInfo.add("  Path: " + flywire.target().nodePath().toString());
+                    flywireInfo.add("  Path: " + PathUtils.toUnixString(flywire.target().nodePath()));
                     flywireInfo.add("  Resource: " + formatResourceDetails(flywire.target().rid()));
                     
                     // Add separator between flywires if there are more
@@ -3687,8 +3617,8 @@ public class CalculationCanvas extends ScrollPane {
      * Check if a flywire is relevant to the target path (involves the path or its children).
      */
     private boolean isFlywireRelevantToPath(me.vincentzz.graph.node.Flywire flywire, String targetPath) {
-        String sourcePath = flywire.source().nodePath().toString();
-        String targetFlywirePath = flywire.target().nodePath().toString();
+        String sourcePath = PathUtils.toUnixString(flywire.source().nodePath());
+        String targetFlywirePath = PathUtils.toUnixString(flywire.target().nodePath());
         
         // Include flywires that start or end at current path or its children
         return sourcePath.startsWith(targetPath) || targetFlywirePath.startsWith(targetPath) ||
@@ -3706,9 +3636,9 @@ public class CalculationCanvas extends ScrollPane {
         }
         
         try {
-            String currentPathStr = currentPath.toString();
+            String currentPathStr = PathUtils.toUnixString(currentPath);
             var graph = model.getEvaluationResult().graph();
-            
+
             // Extract actual scope information by calling exports() on NodeGroup objects
             var scope = extractScopeFromNodeGroup(graph, currentPathStr);
             
@@ -3960,44 +3890,49 @@ public class CalculationCanvas extends ScrollPane {
      * Check if a CalculationNode matches the target path.
      */
     private boolean matchesTargetPath(me.vincentzz.graph.node.CalculationNode calculationNode, String targetPath) {
+        // Normalize path separators for cross-platform compatibility (Windows uses \, Mac uses /)
+        String normalizedPath = targetPath.replace('\\', '/');
+
         // For NodeGroup, get the name
         if (calculationNode instanceof me.vincentzz.graph.node.NodeGroup) {
             var nodeGroup = (me.vincentzz.graph.node.NodeGroup) calculationNode;
             String nodeName = nodeGroup.name();
-            
+
             // Simple path matching - could be enhanced for more complex path resolution
-            if ("/root".equals(targetPath) && "root".equals(nodeName)) {
+            if ("/root".equals(normalizedPath) && "root".equals(nodeName)) {
                 return true;
             }
-            
-            return targetPath.endsWith("/" + nodeName) || targetPath.equals("/" + nodeName);
+
+            return normalizedPath.endsWith("/" + nodeName) || normalizedPath.equals("/" + nodeName);
         }
-        
+
         // For AtomicNode, try to extract name from toString or use a different approach
         // This is a simplified approach - you might need to enhance based on actual AtomicNode structure
         String nodeString = calculationNode.toString();
-        return nodeString.contains(targetPath) || targetPath.equals("/root");
+        return nodeString.contains(normalizedPath) || normalizedPath.equals("/root");
     }
-    
+
     /**
      * Check if a NodeGroup matches the target path.
      */
     private boolean matchesTargetPath(me.vincentzz.graph.node.NodeGroup nodeGroup, String targetPath) {
+        // Normalize path separators for cross-platform compatibility (Windows uses \, Mac uses /)
+        String normalizedPath = targetPath.replace('\\', '/');
         String nodeName = nodeGroup.name();
-        
+
         // Simple path matching - could be enhanced for more complex path resolution
-        if ("/root".equals(targetPath) && "root".equals(nodeName)) {
+        if ("/root".equals(normalizedPath) && "root".equals(nodeName)) {
             return true;
         }
-        
-        return targetPath.endsWith("/" + nodeName) || targetPath.equals("/" + nodeName);
+
+        return normalizedPath.endsWith("/" + nodeName) || normalizedPath.equals("/" + nodeName);
     }
     
     /**
      * Format connection point information for display.
      */
     private String formatConnectionPointInfo(me.vincentzz.graph.node.ConnectionPoint connectionPoint) {
-        String nodePath = connectionPoint.nodePath().toString();
+        String nodePath = PathUtils.toUnixString(connectionPoint.nodePath());
         String resourceInfo = formatResourceDetails(connectionPoint.rid());
         return nodePath + " → " + resourceInfo;
     }

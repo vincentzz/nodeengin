@@ -17,7 +17,6 @@ public class OutputContextJsonDeserializer extends JsonDeserializer<OutputContex
 
     @Override
     public OutputContext deserialize(JsonParser p, DeserializationContext ctxt) throws IOException, JsonProcessingException {
-        System.err.println("DEBUG OUTPUT_CONTEXT_DESER: OutputContextJsonDeserializer.deserialize() called!");
         OutputValueType resultType = null;
         
         // Parse the JSON object
@@ -46,7 +45,6 @@ public class OutputContextJsonDeserializer extends JsonDeserializer<OutputContex
             throw new IOException("Missing required field: resultType");
         }
         
-        System.err.println("DEBUG OUTPUT_CONTEXT_DESER: Successfully created OutputContext with resultType: " + resultType);
         return new OutputContext(resultType);
     }
 }

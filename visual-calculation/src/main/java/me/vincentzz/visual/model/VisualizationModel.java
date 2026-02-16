@@ -5,6 +5,7 @@ import me.vincentzz.graph.model.EvaluationResult;
 import me.vincentzz.graph.model.ResourceIdentifier;
 import me.vincentzz.graph.node.CalculationNode;
 import me.vincentzz.graph.node.NodeGroup;
+import me.vincentzz.lang.PathUtils;
 import me.vincentzz.lang.Result.Result;
 import me.vincentzz.visual.util.ColorScheme;
 import me.vincentzz.visual.util.DynamicColorManager;
@@ -57,7 +58,7 @@ public class VisualizationModel {
     
     private void buildModel() {
         // Build node view models from node evaluation map
-        for (Map.Entry<Path, me.vincentzz.graph.model.NodeEvaluation> entry : 
+        for (Map.Entry<Path, me.vincentzz.graph.model.NodeEvaluation> entry :
              evaluationResult.nodeEvaluationMap().entrySet()) {
             Path nodePath = entry.getKey();
             me.vincentzz.graph.model.NodeEvaluation nodeEvaluation = entry.getValue();
@@ -163,8 +164,8 @@ public class VisualizationModel {
     
     private String getNodeName(Path nodePath) {
         return nodePath.getFileName() != null ? 
-               nodePath.getFileName().toString() : 
-               nodePath.toString();
+               nodePath.getFileName().toString() :
+               PathUtils.toUnixString(nodePath);
     }
     
     private Set<ResourceIdentifier> extractInputs(Path nodePath) {
@@ -198,16 +199,17 @@ public class VisualizationModel {
         Set<ResourceIdentifier> childrenConsumed = new HashSet<>();
         
         // Find all child nodes of this NodeGroup
-        String nodeGroupPathStr = nodeGroupPath.toString();
-        
+        // Normalize path separators for cross-platform compatibility (Windows uses \, Mac uses /)
+        String nodeGroupPathStr = PathUtils.toUnixString(nodeGroupPath);
+
         // Collect what children produce and consume from nodeEvaluationMap
-        for (Map.Entry<Path, me.vincentzz.graph.model.NodeEvaluation> entry : 
+        for (Map.Entry<Path, me.vincentzz.graph.model.NodeEvaluation> entry :
              evaluationResult.nodeEvaluationMap().entrySet()) {
             Path childPath = entry.getKey();
-            String childPathStr = childPath.toString();
-            
+            String childPathStr = PathUtils.toUnixString(childPath);
+
             // Check if this is a direct child of the NodeGroup
-            if (childPathStr.startsWith(nodeGroupPathStr + "/") && 
+            if (childPathStr.startsWith(nodeGroupPathStr + "/") &&
                 !childPathStr.substring(nodeGroupPathStr.length() + 1).contains("/")) {
                 
                 me.vincentzz.graph.model.NodeEvaluation nodeEvaluation = entry.getValue();
@@ -283,19 +285,19 @@ public class VisualizationModel {
     
     public List<ConnectionViewModel> getConnectionsForCurrentPath() {
         Set<String> currentNodePaths = getNodesForCurrentPath().stream()
-            .map(n -> n.getNodePath().toString().replace('\\', '/'))
+            .map(n -> PathUtils.toUnixString(n.getNodePath()))
             .collect(Collectors.toSet());
 
         return connections.stream()
-            .filter(conn -> currentNodePaths.contains(conn.getSourcePath().toString().replace('\\', '/')) ||
-                           currentNodePaths.contains(conn.getTargetPath().toString().replace('\\', '/')))
+            .filter(conn -> currentNodePaths.contains(PathUtils.toUnixString(conn.getSourcePath())) ||
+                           currentNodePaths.contains(PathUtils.toUnixString(conn.getTargetPath())))
             .collect(Collectors.toList());
     }
     
     private boolean isChildOfCurrentPath(Path nodePath) {
         if (nodePath.getParent() == null) return false;
-        String parentStr = nodePath.getParent().toString().replace('\\', '/');
-        String currentStr = currentPath.toString().replace('\\', '/');
+        String parentStr = PathUtils.toUnixString(nodePath.getParent());
+        String currentStr = PathUtils.toUnixString(currentPath);
         return parentStr.equals(currentStr);
     }
     

@@ -60,38 +60,30 @@ public class ConnectionPointJsonDeserializer extends JsonDeserializer<Connection
                 }
                 
                 // Handle FalconResourceId specifically using reflection
-                System.err.println("DEBUG CONN: Trying to deserialize ResourceIdentifier: " + type);
                 try {
                     JsonNode dataNode = node.get("data");
                     ObjectMapper mapper = new ObjectMapper();
                     Map<String, Object> dataMap = mapper.convertValue(dataNode, Map.class);
-                    System.err.println("DEBUG CONN: Data map: " + dataMap);
-                    
+
                     if ("FalconResourceId".equals(type)) {
                         // Handle FalconResourceId specifically - use the of() method
                         String ifo = (String) dataMap.get("ifo");
                         String source = (String) dataMap.get("source");
                         String attribute = (String) dataMap.get("attribute");
                         
-                        System.err.println("DEBUG CONN: ifo=" + ifo + ", source=" + source + ", attribute=" + attribute);
-                        
                         try {
                             Class<?> attributeClass = Class.forName("me.vincentzz.falcon.attribute." + attribute);
                             Class<?> falconResourceIdClass = Class.forName("me.vincentzz.falcon.ifo.FalconResourceId");
                             java.lang.reflect.Method ofMethod = falconResourceIdClass.getMethod("of", String.class, String.class, Class.class);
                             ResourceIdentifier result = (ResourceIdentifier) ofMethod.invoke(null, ifo, source, attributeClass);
-                            System.err.println("DEBUG CONN: Successfully created FalconResourceId: " + result);
                             return result;
                         } catch (Exception reflectionEx) {
-                            System.err.println("DEBUG CONN: Failed to create FalconResourceId: " + reflectionEx.getMessage());
                             throw new IllegalArgumentException("Unable to create FalconResourceId", reflectionEx);
                         }
                     } else {
                         throw new IllegalArgumentException("Unsupported ResourceIdentifier type: " + type);
                     }
                 } catch (Exception ex) {
-                    System.err.println("DEBUG CONN: Failed to create ResourceIdentifier: " + ex.getMessage());
-                    ex.printStackTrace();
                     throw new IllegalArgumentException("Unable to deserialize ResourceIdentifier of type: " + type, ex);
                 }
             }

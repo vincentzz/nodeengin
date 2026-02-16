@@ -23,8 +23,7 @@ public class ResourceIdentifierJsonDeserializer extends JsonDeserializer<Resourc
         
         if (node.has("type") && node.has("data")) {
             String type = node.get("type").asText();
-            System.err.println("DEBUG RESOURCE: Deserializing ResourceIdentifier type: " + type);
-            
+
             if ("FalconResourceId".equals(type)) {
                 JsonNode dataNode = node.get("data");
                 ObjectMapper mapper = new ObjectMapper();
@@ -34,17 +33,13 @@ public class ResourceIdentifierJsonDeserializer extends JsonDeserializer<Resourc
                 String source = (String) dataMap.get("source");
                 String attribute = (String) dataMap.get("attribute");
                 
-                System.err.println("DEBUG RESOURCE: Creating FalconResourceId with ifo=" + ifo + ", source=" + source + ", attribute=" + attribute);
-                
                 try {
                     Class<?> attributeClass = Class.forName("me.vincentzz.falcon.attribute." + attribute);
                     Class<?> falconResourceIdClass = Class.forName("me.vincentzz.falcon.ifo.FalconResourceId");
                     java.lang.reflect.Method ofMethod = falconResourceIdClass.getMethod("of", String.class, String.class, Class.class);
                     ResourceIdentifier result = (ResourceIdentifier) ofMethod.invoke(null, ifo, source, attributeClass);
-                    System.err.println("DEBUG RESOURCE: Successfully created: " + result);
                     return result;
                 } catch (Exception e) {
-                    System.err.println("DEBUG RESOURCE: Failed to create FalconResourceId: " + e.getMessage());
                     throw new IllegalArgumentException("Unable to create FalconResourceId", e);
                 }
             } else {

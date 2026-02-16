@@ -33,8 +33,6 @@ public class ConstructionalJsonUtil {
      * @return Configured ObjectMapper
      */
     private static ObjectMapper createObjectMapper() {
-        System.err.println("DEBUG MAPPER: Creating ObjectMapper with custom deserializers...");
-        
         // Ensure required node types are registered before creating ObjectMapper
         registerCommonNodeTypes();
         
@@ -55,14 +53,12 @@ public class ConstructionalJsonUtil {
         try {
             // This should disable the built-in record serialization
             mapper.configure(com.fasterxml.jackson.databind.MapperFeature.USE_ANNOTATIONS, false);
-            System.err.println("DEBUG MAPPER: Disabled USE_ANNOTATIONS to prevent record auto-serialization");
         } catch (Exception e) {
-            System.err.println("DEBUG MAPPER: Could not disable USE_ANNOTATIONS: " + e.getMessage());
+            // Could not disable USE_ANNOTATIONS
         }
         
         // Create the deserializer
         ConstructionalJsonDeserializer deserializer = new ConstructionalJsonDeserializer();
-        System.err.println("DEBUG MAPPER: Created ConstructionalJsonDeserializer: " + deserializer);
         
         // Create and register the module
         SimpleModule module = new SimpleModule("ConstructionalModule");
@@ -127,7 +123,6 @@ public class ConstructionalJsonUtil {
             if (falconResourceIdClass != null) {
                 // Create an empty mixin interface to force Jackson to bypass record serialization
                 mapper.addMixIn(falconResourceIdClass, ResourceIdentifierMixin.class);
-                System.err.println("DEBUG MAPPER: Added mixin for FalconResourceId to force custom serializer");
             }
         } catch (ClassNotFoundException e) {
             // FalconResourceId not available, skip
@@ -135,47 +130,29 @@ public class ConstructionalJsonUtil {
         
         // Add mixin for EvaluationResult to force custom serializer
         mapper.addMixIn(EvaluationResult.class, ResourceIdentifierMixin.class);
-        System.err.println("DEBUG MAPPER: Added mixin for EvaluationResult to force custom serializer");
-        
+
         // Add mixin for Flywire to force custom serializer
         mapper.addMixIn(me.vincentzz.graph.node.Flywire.class, ResourceIdentifierMixin.class);
-        System.err.println("DEBUG MAPPER: Added mixin for Flywire to force custom serializer");
-        
-        // Add mixin for ConnectionPoint to force custom serializer  
+
+        // Add mixin for ConnectionPoint to force custom serializer
         mapper.addMixIn(me.vincentzz.graph.node.ConnectionPoint.class, ResourceIdentifierMixin.class);
-        System.err.println("DEBUG MAPPER: Added mixin for ConnectionPoint to force custom serializer");
-        
+
         // Add mixin for AdhocOverride to force custom serializer
         mapper.addMixIn(AdhocOverride.class, ResourceIdentifierMixin.class);
-        System.err.println("DEBUG MAPPER: Added mixin for AdhocOverride to force custom serializer");
-        
+
         // Add mixins for additional record types
         mapper.addMixIn(me.vincentzz.graph.model.output.OutputContext.class, ResourceIdentifierMixin.class);
-        System.err.println("DEBUG MAPPER: Added mixin for OutputContext to force custom serializer");
-        
+
         mapper.addMixIn(me.vincentzz.graph.model.input.InputContext.class, ResourceIdentifierMixin.class);
-        System.err.println("DEBUG MAPPER: Added mixin for InputContext to force custom serializer");
-        
+
         mapper.addMixIn(me.vincentzz.graph.model.NodeEvaluation.class, ResourceIdentifierMixin.class);
-        System.err.println("DEBUG MAPPER: Added mixin for NodeEvaluation to force custom serializer");
-        
+
         mapper.addMixIn(me.vincentzz.graph.model.input.InputResult.class, ResourceIdentifierMixin.class);
-        System.err.println("DEBUG MAPPER: Added mixin for InputResult to force custom serializer");
-        
+
         mapper.addMixIn(me.vincentzz.graph.model.output.OutputResult.class, ResourceIdentifierMixin.class);
-        System.err.println("DEBUG MAPPER: Added mixin for OutputResult to force custom serializer");
-        
+
         mapper.addMixIn(me.vincentzz.graph.model.Snapshot.class, ResourceIdentifierMixin.class);
-        System.err.println("DEBUG MAPPER: Added mixin for Snapshot to force custom serializer");
-        
-        // Print which deserializers we're registering for debugging
-        System.err.println("DEBUG MAPPER: Registering deserializers for:");
-        System.err.println("  - InputResult: " + me.vincentzz.graph.model.input.InputResult.class);
-        System.err.println("  - OutputResult: " + me.vincentzz.graph.model.output.OutputResult.class);
-        System.err.println("  - NodeEvaluation: " + me.vincentzz.graph.model.NodeEvaluation.class);
-        System.err.println("  - InputContext: " + me.vincentzz.graph.model.input.InputContext.class);
-        System.err.println("  - OutputContext: " + me.vincentzz.graph.model.output.OutputContext.class);
-        
+
         mapper.registerModule(module);
         
         // Additional step: Force Jackson to recognize our custom serializer for EvaluationResult
@@ -188,22 +165,15 @@ public class ConstructionalJsonUtil {
                         com.fasterxml.jackson.databind.BeanDescription beanDesc,
                         com.fasterxml.jackson.databind.JsonSerializer<?> serializer) {
                     if (beanDesc.getBeanClass() == EvaluationResult.class) {
-                        System.err.println("DEBUG MAPPER: Forcing EvaluationResult to use custom serializer!");
                         return evalResultSerializer;
                     }
                     return serializer;
                 }
             });
         } catch (Exception e) {
-            System.err.println("DEBUG MAPPER: Could not add serializer modifier: " + e.getMessage());
+            // Could not add serializer modifier
         }
-        System.err.println("DEBUG MAPPER: Registered module with deserializer");
-        System.err.println("DEBUG MAPPER: Total registered modules: " + mapper.getRegisteredModuleIds().size());
-        
-        for (Object moduleId : mapper.getRegisteredModuleIds()) {
-            System.err.println("DEBUG MAPPER: Registered module ID: " + moduleId);
-        }
-        
+
         return mapper;
     }
     
@@ -241,7 +211,6 @@ public class ConstructionalJsonUtil {
         
         mapper.registerModule(module);
         
-        System.err.println("DEBUG EVAL MAPPER: Created dedicated EvaluationResult ObjectMapper");
         return mapper;
     }
     
@@ -295,21 +264,15 @@ public class ConstructionalJsonUtil {
             try {
                 Class<?> falconResourceIdClass = Class.forName("me.vincentzz.falcon.ifo.FalconResourceId");
                 if (falconResourceIdClass != null) {
-                    System.err.println("DEBUG MAPPER: Successfully found FalconResourceId class: " + falconResourceIdClass);
                     NodeTypeRegistry.registerResourceType("FalconResourceId", (Class<? extends ResourceIdentifier>) falconResourceIdClass);
-                    System.err.println("DEBUG MAPPER: Successfully registered FalconResourceId in NodeTypeRegistry");
-                } else {
-                    System.err.println("DEBUG MAPPER: FalconResourceId class was null");
                 }
             } catch (ClassNotFoundException e) {
-                System.err.println("DEBUG MAPPER: FalconResourceId not available - ClassNotFoundException: " + e.getMessage());
+                // FalconResourceId not available, skip
             } catch (Exception e) {
-                System.err.println("DEBUG MAPPER: Error registering FalconResourceId: " + e.getMessage());
-                e.printStackTrace();
+                // Error registering FalconResourceId
             }
             
         } catch (Exception e) {
-            System.err.println("DEBUG MAPPER: Warning - Failed to register some node types: " + e.getMessage());
             // Continue anyway - core functionality should still work
         }
     }
@@ -324,7 +287,6 @@ public class ConstructionalJsonUtil {
      */
     public static Result<String> toJson(CalculationNode node) {
         try {
-            System.err.println("DEBUG: ConstructionalJsonUtil.toJson() called for node: " + node.getClass().getSimpleName() + " - " + node.name());
             String json = OBJECT_MAPPER.writerWithDefaultPrettyPrinter()
                 .writeValueAsString(node);
             return Success.of(json);
@@ -393,19 +355,10 @@ public class ConstructionalJsonUtil {
      * @return Result containing reconstructed CalculationNode or error
      */
     public static Result<CalculationNode> fromJson(String json) {
-        System.err.println("==== FROMJSON METHOD CALLED ====");
-        System.err.println("==== FROMJSON METHOD CALLED ====");
-        System.err.println("==== FROMJSON METHOD CALLED ====");
         try {
-            System.err.println("DEBUG UTIL: Starting JSON deserialization...");
-            System.err.println("DEBUG UTIL: JSON length: " + json.length());
-            System.err.println("DEBUG UTIL: First 200 chars: " + json.substring(0, Math.min(200, json.length())));
             CalculationNode node = OBJECT_MAPPER.readValue(json, CalculationNode.class);
-            System.err.println("DEBUG UTIL: Successfully deserialized CalculationNode");
             return Success.of(node);
         } catch (Exception e) {
-            System.err.println("DEBUG UTIL: Failed to deserialize JSON: " + e.getMessage());
-            e.printStackTrace();
             return Failure.of(new RuntimeException("Failed to deserialize JSON to CalculationNode: " + e.getMessage(), e));
         }
     }
@@ -452,14 +405,10 @@ public class ConstructionalJsonUtil {
      */
     public static Result<String> toJsonEvaluationResult(EvaluationResult evaluationResult) {
         try {
-            System.err.println("DEBUG EVAL: Starting EvaluationResult serialization...");
             String json = OBJECT_MAPPER.writerWithDefaultPrettyPrinter()
                 .writeValueAsString(evaluationResult);
-            System.err.println("DEBUG EVAL: Jackson serialization successful, JSON length: " + json.length());
             return Success.of(json);
         } catch (Exception e) {
-            System.err.println("DEBUG EVAL: Jackson serialization failed: " + e.getMessage());
-            e.printStackTrace();
             return Failure.of(new RuntimeException("Failed to serialize EvaluationResult to JSON: " + e.getMessage(), e));
         }
     }
@@ -691,21 +640,9 @@ public class ConstructionalJsonUtil {
      */
     public static Result<EvaluationResult> fromJsonEvaluationResult(String json) {
         try {
-            System.err.println("DEBUG EVAL DESER: Starting EvaluationResult deserialization...");
-            System.err.println("DEBUG EVAL DESER: JSON length: " + json.length());
-            System.err.println("DEBUG EVAL DESER: First 500 chars: " + json.substring(0, Math.min(500, json.length())));
-            
-            // Look for the specific empty flywire issue
-            if (json.contains("\"adhocFlywires\" : [ { } ]")) {
-                System.err.println("DEBUG EVAL DESER: FOUND EMPTY FLYWIRE ISSUE IN JSON!");
-            }
-            
             EvaluationResult evaluationResult = OBJECT_MAPPER.readValue(json, EvaluationResult.class);
-            System.err.println("DEBUG EVAL DESER: Successfully deserialized EvaluationResult");
             return Success.of(evaluationResult);
         } catch (Exception e) {
-            System.err.println("DEBUG EVAL DESER: Failed to deserialize JSON: " + e.getMessage());
-            e.printStackTrace();
             return Failure.of(new RuntimeException("Failed to deserialize JSON to EvaluationResult: " + e.getMessage(), e));
         }
     }

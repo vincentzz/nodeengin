@@ -7,6 +7,7 @@ import me.vincentzz.graph.model.input.InputSourceType;
 import me.vincentzz.graph.model.output.OutputContext;
 import me.vincentzz.graph.model.output.OutputResult;
 import me.vincentzz.graph.node.*;
+import me.vincentzz.lang.PathUtils;
 import me.vincentzz.lang.Result.Failure;
 import me.vincentzz.lang.Result.Result;
 import me.vincentzz.lang.collection.MapUtils;
@@ -129,7 +130,7 @@ public final class CalculationEngine {
 
     public EvaluationResult evaluateForResult(Path path, Snapshot snapshot, Set<ResourceIdentifier> requestedResources, Optional<AdhocOverride> adhocOverride) {
         if (!path.startsWith(rootNodePath())) {
-            throw new RuntimeException("cannot evaluate path '" + path + "'");
+            throw new RuntimeException("cannot evaluate path '" + PathUtils.toUnixString(path) + "'");
         }
         Objects.requireNonNull(path, "path cannot be null");
         Objects.requireNonNull(snapshot, "snapshot cannot be null");
@@ -159,7 +160,7 @@ public final class CalculationEngine {
         return switch (node) {
             case AtomicNode aNode -> {
                 if (evalStack.contains(path)) {
-                    throw new RuntimeException("Cycle detected: " + path + " already in evaluation stack: " + evalStack + ". This indicates a circular dependency in your calculation graph.");
+                    throw new RuntimeException("Cycle detected: " + PathUtils.toUnixString(path) + " already in evaluation stack: " + evalStack + ". This indicates a circular dependency in your calculation graph.");
                 }
                 Set<Path> newStack = new LinkedHashSet<>(evalStack);
                 newStack.add(path);
@@ -253,7 +254,7 @@ public final class CalculationEngine {
                             CalculationNode node = providers.get(0);
                             dependedConnectPoint = ConnectionPoint.of(parentPath.resolve(node.name()), rid);
                         } else {
-                            return Tuple.of(InputSourceType.ByResolve, Failure.of(new RuntimeException("ambiguous with multiple providers for '" + rid + "', under path '" + path + "'")));
+                            return Tuple.of(InputSourceType.ByResolve, Failure.of(new RuntimeException("ambiguous with multiple providers for '" + rid + "', under path '" + PathUtils.toUnixString(path) + "'")));
                         }
                     }
                 }
@@ -280,7 +281,7 @@ public final class CalculationEngine {
             Map<ResourceIdentifier, OutputResult> evalResults = remainingResources.stream().collect(Collectors.toUnmodifiableMap(Function.identity(), rid -> {
                 Optional<List<CalculationNode>> providersOp = Optional.ofNullable(scopedResourceProviderIndex.get(path)).flatMap(m -> Optional.ofNullable(m.get(rid)));
                 if (providersOp.isEmpty()) {
-                    return new OutputResult(new OutputContext(ByEvaluation), Failure.of(new RuntimeException("no resource provider in group '" + path + "' for rid '" + rid + "'")));
+                    return new OutputResult(new OutputContext(ByEvaluation), Failure.of(new RuntimeException("no resource provider in group '" + PathUtils.toUnixString(path) + "' for rid '" + rid + "'")));
                 } else {
                     List<CalculationNode> providers = providersOp.get();
                     if (providers.size() == 1) {
@@ -288,7 +289,7 @@ public final class CalculationEngine {
                         OutputResult dependencyResult = evaluateWithContext(path.resolve(providerNode.name()), Set.of(rid), context, evalStack).get(rid);
                         return new OutputResult(new OutputContext(ByEvaluation), dependencyResult.value());
                     } else {
-                        return new OutputResult(new OutputContext(ByEvaluation), Failure.of(new RuntimeException("ambiguous with multiple providers for '" + rid + "', under path '" + path + "'")));
+                        return new OutputResult(new OutputContext(ByEvaluation), Failure.of(new RuntimeException("ambiguous with multiple providers for '" + rid + "', under path '" + PathUtils.toUnixString(path) + "'")));
                     }
                 }
             }));

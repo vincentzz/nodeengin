@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.SerializerProvider;
 import me.vincentzz.graph.model.ResourceIdentifier;
 import me.vincentzz.graph.node.CalculationNode;
 import me.vincentzz.graph.node.NodeGroup;
+import me.vincentzz.lang.PathUtils;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -104,13 +105,13 @@ public class ConstructionalJsonSerializer extends JsonSerializer<CalculationNode
             gen.writeStartObject();
             
             gen.writeObjectFieldStart("source");
-            gen.writeStringField("nodePath", flywire.source().nodePath().toString());
+            gen.writeStringField("nodePath", PathUtils.toUnixString(flywire.source().nodePath()));
             gen.writeFieldName("resourceId");
             writeJsonValue(flywire.source().rid(), gen);
             gen.writeEndObject();
-            
+
             gen.writeObjectFieldStart("target");
-            gen.writeStringField("nodePath", flywire.target().nodePath().toString());
+            gen.writeStringField("nodePath", PathUtils.toUnixString(flywire.target().nodePath()));
             gen.writeFieldName("resourceId");
             writeJsonValue(flywire.target().rid(), gen);
             gen.writeEndObject();
@@ -176,8 +177,8 @@ public class ConstructionalJsonSerializer extends JsonSerializer<CalculationNode
             Object nodePathObj = getNodePathMethod.invoke(scopeValue);
             ResourceIdentifier resourceIdentifier = (ResourceIdentifier) getRidMethod.invoke(scopeValue);
             
-            // Convert Path to String
-            String nodePath = nodePathObj.toString();
+            // Convert Path to String (always use '/' separator)
+            String nodePath = nodePathObj.toString().replace('\\', '/');
             
             gen.writeStringField("nodePath", nodePath);
             
@@ -240,11 +241,9 @@ public class ConstructionalJsonSerializer extends JsonSerializer<CalculationNode
                     return;
                 } catch (Exception e) {
                     // Fall back to custom serialization if delegation fails
-                    System.err.println("DEBUG: Failed to delegate CalculationNode serialization: " + e.getMessage());
                 }
             }
             // Fallback - should not reach here normally
-            System.err.println("DEBUG: Fallback serialization for CalculationNode: " + value.getClass().getSimpleName());
             gen.writeString("ERROR: Failed to serialize CalculationNode: " + value.toString());
         } else if (value instanceof ResourceIdentifier) {
             // Use the registered ResourceIdentifier serializer instead of custom logic
@@ -254,8 +253,6 @@ public class ConstructionalJsonSerializer extends JsonSerializer<CalculationNode
                     serializer.serialize(value, gen, serializerProvider);
                     return;
                 } catch (Exception e) {
-                    System.err.println("DEBUG: Failed to delegate ResourceIdentifier serialization: " + e.getMessage());
-                    e.printStackTrace();
                     // Fall back to custom serialization if delegation fails
                 }
             }

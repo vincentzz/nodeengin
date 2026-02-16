@@ -11,6 +11,7 @@ import me.vincentzz.graph.node.ConnectionPoint;
 import me.vincentzz.graph.scope.Exclude;
 import me.vincentzz.graph.scope.Include;
 import me.vincentzz.graph.scope.Scope;
+import me.vincentzz.lang.PathUtils;
 import me.vincentzz.visual.util.ColorScheme;
 
 import java.nio.file.Path;
@@ -80,10 +81,10 @@ public class EditScopeDialog extends Dialog<Scope<ConnectionPoint>> {
                 allPoints.add(ConnectionPoint.of(Path.of(child.name()), rid));
             }
         }
-        allPoints.sort(Comparator.comparing(cp -> cp.nodePath().toString() + cp.rid().toString()));
+        allPoints.sort(Comparator.comparing(cp -> PathUtils.toUnixString(cp.nodePath()) + cp.rid().toString()));
 
         for (ConnectionPoint cp : allPoints) {
-            CheckBox cb = new CheckBox(cp.nodePath() + " : " + cp.rid());
+            CheckBox cb = new CheckBox(PathUtils.toUnixString(cp.nodePath()) + " : " + cp.rid());
             cb.setTextFill(ColorScheme.TEXT_PRIMARY);
             cb.setSelected(scopedPoints.contains(cp));
             checkBoxMap.put(cp, cb);

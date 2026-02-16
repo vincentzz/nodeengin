@@ -10,6 +10,7 @@ import me.vincentzz.graph.node.NodeGroup;
 import me.vincentzz.graph.scope.Exclude;
 import me.vincentzz.graph.scope.Include;
 import me.vincentzz.graph.scope.Scope;
+import me.vincentzz.lang.PathUtils;
 
 import java.io.IOException;
 import java.util.Set;
@@ -188,7 +189,7 @@ public class NodeGroupJsonSerializer extends JsonSerializer<NodeGroup> {
     
     private void serializeConnectionPoint(ConnectionPoint cp, JsonGenerator gen) throws IOException {
         gen.writeStartObject();
-        gen.writeStringField("nodePath", cp.nodePath().toString());
+        gen.writeStringField("nodePath", PathUtils.toUnixString(cp.nodePath()));
         gen.writeObjectFieldStart("resourceIdentifier");
         serializeResourceIdentifierFields(cp.rid(), gen);
         gen.writeEndObject();

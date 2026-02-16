@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.SerializerProvider;
 import me.vincentzz.graph.model.EvaluationResult;
 import me.vincentzz.graph.model.NodeEvaluation;
 import me.vincentzz.graph.model.ResourceIdentifier;
+import me.vincentzz.lang.PathUtils;
 import me.vincentzz.lang.Result.Result;
 
 import java.io.IOException;
@@ -28,7 +29,7 @@ public class EvaluationResultJsonSerializer extends JsonSerializer<EvaluationRes
             .serialize(evaluationResult.snapshot(), gen, serializers);
         
         // Serialize requestedNodePath as string
-        gen.writeStringField("requestedNodePath", evaluationResult.requestedNodePath().toString());
+        gen.writeStringField("requestedNodePath", PathUtils.toUnixString(evaluationResult.requestedNodePath()));
         
         // Serialize adhocOverride using registered serializer
         gen.writeFieldName("adhocOverride");
@@ -62,7 +63,7 @@ public class EvaluationResultJsonSerializer extends JsonSerializer<EvaluationRes
             gen.writeStartObject();
             
             // Outer key is Path
-            gen.writeStringField("key", outerEntry.getKey().toString());
+            gen.writeStringField("key", PathUtils.toUnixString(outerEntry.getKey()));
             
             // Outer value is NodeEvaluation - use our custom serializer directly
             gen.writeFieldName("value");

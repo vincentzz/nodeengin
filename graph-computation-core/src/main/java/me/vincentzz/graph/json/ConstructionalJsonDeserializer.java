@@ -17,31 +17,24 @@ import java.util.*;
 public class ConstructionalJsonDeserializer extends JsonDeserializer<CalculationNode> {
     
     @Override
-    public CalculationNode deserialize(JsonParser p, DeserializationContext ctxt) 
+    public CalculationNode deserialize(JsonParser p, DeserializationContext ctxt)
             throws IOException, JsonProcessingException {
-        System.err.println("DEBUG DESERIALIZER: deserialize() method called!");
         JsonNode node = p.getCodec().readTree(p);
         return parseCalculationNode(node);
     }
     
     private CalculationNode parseCalculationNode(JsonNode node) {
         String type = node.get("type").asText();
-        System.err.println("DEBUG DESERIALIZER: Parsing node type: " + type);
-        
+
         if ("NodeGroup".equals(type)) {
             // Try "parameter" (singular) first - this is the correct format
             JsonNode parameterNode = node.get("parameter");
             if (parameterNode != null) {
-                System.err.println("DEBUG DESERIALIZER: Found 'parameter' field for NodeGroup");
                 try {
                     Map<String, Object> parameters = parseNodeGroupParameters(parameterNode);
-                    System.err.println("DEBUG DESERIALIZER: Parsed NodeGroup parameters: " + parameters.keySet());
                     CalculationNode result = NodeTypeRegistry.createNode(type, parameters);
-                    System.err.println("DEBUG DESERIALIZER: Successfully created NodeGroup: " + result.name());
                     return result;
                 } catch (Exception e) {
-                    System.err.println("DEBUG DESERIALIZER: Failed to create NodeGroup: " + e.getMessage());
-                    e.printStackTrace();
                     throw e;
                 }
             }
@@ -63,17 +56,12 @@ public class ConstructionalJsonDeserializer extends JsonDeserializer<Calculation
             
             throw new RuntimeException("Invalid NodeGroup format: missing 'parameter' field");
         } else {
-            System.err.println("DEBUG DESERIALIZER: Parsing atomic node type: " + type);
             JsonNode parametersNode = node.get("parameters");
             try {
                 Map<String, Object> parameters = parseParameterMap(parametersNode);
-                System.err.println("DEBUG DESERIALIZER: Parsed atomic parameters: " + parameters.keySet());
                 CalculationNode result = NodeTypeRegistry.createNode(type, parameters);
-                System.err.println("DEBUG DESERIALIZER: Successfully created atomic node: " + result.name());
                 return result;
             } catch (Exception e) {
-                System.err.println("DEBUG DESERIALIZER: Failed to create atomic node " + type + ": " + e.getMessage());
-                e.printStackTrace();
                 throw e;
             }
         }
@@ -87,31 +75,24 @@ public class ConstructionalJsonDeserializer extends JsonDeserializer<Calculation
         
         // Parse nodes
         JsonNode nodesArray = parameterNode.get("nodes");
-        System.err.println("DEBUG DESERIALIZER: nodesArray type: " + (nodesArray != null ? nodesArray.getClass() : "null"));
-        System.err.println("DEBUG DESERIALIZER: nodesArray isArray: " + (nodesArray != null ? nodesArray.isArray() : "null"));
         if (nodesArray != null && nodesArray.isArray()) {
             List<Map<String, Object>> nodesList = new ArrayList<>();
-            System.err.println("DEBUG DESERIALIZER: Created nodesList: " + nodesList.getClass());
-            
+
             for (JsonNode nodeSpec : nodesArray) {
                 String nodeType = nodeSpec.get("type").asText();
-                System.err.println("DEBUG DESERIALIZER: Processing node type: " + nodeType);
                 
                 if ("NodeGroup".equals(nodeType)) {
                     // Handle NodeGroup nodes - they use "parameter" (singular), not "parameters" (plural)
                     JsonNode nodeParameterSingular = nodeSpec.get("parameter");
                     if (nodeParameterSingular != null) {
-                        System.err.println("DEBUG DESERIALIZER: Found nested NodeGroup with 'parameter' field");
                         Map<String, Object> nodeGroupInfo = new HashMap<>();
                         nodeGroupInfo.put("type", "NodeGroup");
                         nodeGroupInfo.put("parameter", parseNodeGroupParameters(nodeParameterSingular));
                         nodesList.add(nodeGroupInfo);
-                        System.err.println("DEBUG DESERIALIZER: Successfully processed nested NodeGroup");
                     } else {
                         // Fallback: check for malformed "parameters" (plural) format
                         JsonNode nodeParametersArray = nodeSpec.get("parameters");
                         if (nodeParametersArray != null && nodeParametersArray.isArray()) {
-                            System.err.println("DEBUG DESERIALIZER: Found malformed NodeGroup with 'parameters' array - fixing");
                             // Malformed format: multiple NodeGroups batched together in parameters array
                             for (JsonNode parameterSet : nodeParametersArray) {
                                 Map<String, Object> nodeGroupInfo = new HashMap<>();
@@ -121,7 +102,6 @@ public class ConstructionalJsonDeserializer extends JsonDeserializer<Calculation
                                 System.err.println("WARNING: Found malformed NodeGroup in 'parameters' array during parsing. Fixed automatically but this indicates a serialization issue.");
                             }
                         } else {
-                            System.err.println("ERROR DESERIALIZER: NodeGroup missing both 'parameter' and 'parameters' fields");
                             throw new RuntimeException("NodeGroup missing parameter field(s)");
                         }
                     }
@@ -129,7 +109,6 @@ public class ConstructionalJsonDeserializer extends JsonDeserializer<Calculation
                     // Handle atomic nodes normally
                     JsonNode nodeParametersArray = nodeSpec.get("parameters");
                     if (nodeParametersArray != null && nodeParametersArray.isArray()) {
-                        System.err.println("DEBUG DESERIALIZER: Processing atomic node with " + nodeParametersArray.size() + " parameter sets");
                         List<Map<String, Object>> parametersList = new ArrayList<>();
                         for (JsonNode parameterSet : nodeParametersArray) {
                             parametersList.add(parseParameterMap(parameterSet));
@@ -138,9 +117,7 @@ public class ConstructionalJsonDeserializer extends JsonDeserializer<Calculation
                         nodeInfo.put("type", nodeType);
                         nodeInfo.put("parameters", parametersList);  // This should be a List
                         nodesList.add(nodeInfo);
-                        System.err.println("DEBUG DESERIALIZER: Successfully processed atomic node: " + nodeType);
                     } else {
-                        System.err.println("ERROR DESERIALIZER: Atomic node " + nodeType + " missing 'parameters' field");
                         throw new RuntimeException("Atomic node " + nodeType + " missing parameters field");
                     }
                 }

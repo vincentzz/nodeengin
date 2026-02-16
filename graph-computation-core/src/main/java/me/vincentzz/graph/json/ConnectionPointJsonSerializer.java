@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.SerializerProvider;
 import me.vincentzz.graph.node.ConnectionPoint;
+import me.vincentzz.lang.PathUtils;
 
 import java.io.IOException;
 
@@ -18,7 +19,7 @@ public class ConnectionPointJsonSerializer extends JsonSerializer<ConnectionPoin
         gen.writeStartObject();
         
         // Serialize nodePath as string
-        gen.writeStringField("nodePath", connectionPoint.nodePath().toString());
+        gen.writeStringField("nodePath", PathUtils.toUnixString(connectionPoint.nodePath()));
         
         // Serialize resourceId using registered ResourceIdentifier serializer
         gen.writeFieldName("resourceId");

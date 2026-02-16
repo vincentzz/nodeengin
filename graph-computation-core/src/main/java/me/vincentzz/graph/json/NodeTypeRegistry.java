@@ -100,23 +100,15 @@ public class NodeTypeRegistry {
      * @throws RuntimeException if construction fails
      */
     public static CalculationNode createNode(String typeName, Map<String, Object> parameters) {
-        System.err.println("DEBUG REGISTRY: createNode called with type: " + typeName);
-        System.err.println("DEBUG REGISTRY: parameters keys: " + (parameters != null ? parameters.keySet() : "null"));
-        
         try {
             Class<? extends CalculationNode> nodeClass = getNodeClass(typeName);
-            System.err.println("DEBUG REGISTRY: Found node class: " + nodeClass.getSimpleName());
-            
+
             if (NodeGroup.class.equals(nodeClass)) {
-                System.err.println("DEBUG REGISTRY: Creating NodeGroup...");
                 return createNodeGroup(parameters);
             } else {
-                System.err.println("DEBUG REGISTRY: Creating atomic node...");
                 return createAtomicNode(nodeClass, parameters);
             }
         } catch (Exception e) {
-            System.err.println("DEBUG REGISTRY: Failed to create node " + typeName + ": " + e.getMessage());
-            e.printStackTrace();
             throw e;
         }
     }
@@ -151,18 +143,11 @@ public class NodeTypeRegistry {
         try {
             String name = (String) parameters.get("name");
             
-            // Debug: Check what type "nodes" actually is
             Object nodesObject = parameters.get("nodes");
-            System.err.println("DEBUG REGISTRY: nodes object type: " + (nodesObject != null ? nodesObject.getClass() : "null"));
-            System.err.println("DEBUG REGISTRY: nodes object content: " + nodesObject);
-            System.err.println("DEBUG REGISTRY: All parameters keys: " + parameters.keySet());
-            System.err.println("DEBUG REGISTRY: All parameters: " + parameters);
-            
+
             if (nodesObject instanceof List) {
-                System.err.println("DEBUG REGISTRY: nodes is a List - proceeding with cast");
                 List<Map<String, Object>> nodesList = (List<Map<String, Object>>) parameters.get("nodes");
             } else {
-                System.err.println("DEBUG REGISTRY: nodes is NOT a List - this is the problem!");
                 throw new RuntimeException("Expected 'nodes' to be a List but got " + (nodesObject != null ? nodesObject.getClass() : "null"));
             }
             
@@ -222,9 +207,6 @@ public class NodeTypeRegistry {
     
     private static CalculationNode createAtomicNode(Class<? extends CalculationNode> nodeClass, Map<String, Object> parameters) {
         try {
-            System.err.println("DEBUG REGISTRY: createAtomicNode for " + nodeClass.getSimpleName());
-            System.err.println("DEBUG REGISTRY: Raw parameters: " + parameters);
-            
             // First, reconstruct complex objects from the parameters
             Map<String, Object> reconstructedParams = new HashMap<>();
             for (Map.Entry<String, Object> entry : parameters.entrySet()) {
@@ -232,7 +214,6 @@ public class NodeTypeRegistry {
                 Object value = entry.getValue();
                 Object reconstructed = reconstructComplexObject(value);
                 reconstructedParams.put(key, reconstructed);
-                System.err.println("DEBUG REGISTRY: Reconstructed " + key + ": " + reconstructed + " (type: " + (reconstructed != null ? reconstructed.getClass().getSimpleName() : "null") + ")");
             }
             
             // For AtomicNode, we need to find the appropriate constructor
@@ -242,15 +223,9 @@ public class NodeTypeRegistry {
             for (Constructor<?> constructor : constructors) {
                 Class<?>[] paramTypes = constructor.getParameterTypes();
                 Object[] args = new Object[paramTypes.length];
-                
-                System.err.println("DEBUG REGISTRY: Trying constructor with " + paramTypes.length + " parameters");
-                for (int i = 0; i < paramTypes.length; i++) {
-                    System.err.println("DEBUG REGISTRY:   Param " + i + ": " + paramTypes[i].getSimpleName());
-                }
-                
+
                 // Enhanced parameter mapping with complex object support
                 if (tryMapParametersEnhanced(reconstructedParams, paramTypes, args)) {
-                    System.err.println("DEBUG REGISTRY: Successfully mapped parameters, creating instance");
                     return (CalculationNode) constructor.newInstance(args);
                 }
             }
@@ -572,69 +547,50 @@ public class NodeTypeRegistry {
      * @return true if mapping was successful
      */
     private static boolean tryMapDataToConstructor(Map<String, Object> data, Class<?>[] paramTypes, Object[] args) {
-        System.err.println("DEBUG REGISTRY: tryMapDataToConstructor - data: " + data);
-        System.err.println("DEBUG REGISTRY: tryMapDataToConstructor - paramTypes: " + java.util.Arrays.toString(paramTypes));
-        
         // Handle Ask record specifically: need to match field names to constructor parameter positions
         if (paramTypes.length == 3 && data.containsKey("price") && data.containsKey("size") && data.containsKey("time")) {
             try {
                 // For Ask(BigDecimal price, BigDecimal size, Instant time)
                 Object priceValue = data.get("price");
-                Object sizeValue = data.get("size"); 
+                Object sizeValue = data.get("size");
                 Object timeValue = data.get("time");
-                
-                System.err.println("DEBUG REGISTRY: price=" + priceValue + " (" + (priceValue != null ? priceValue.getClass() : "null") + ")");
-                System.err.println("DEBUG REGISTRY: size=" + sizeValue + " (" + (sizeValue != null ? sizeValue.getClass() : "null") + ")");
-                System.err.println("DEBUG REGISTRY: time=" + timeValue + " (" + (timeValue != null ? timeValue.getClass() : "null") + ")");
-                
+
                 // Convert price to BigDecimal
                 if (paramTypes[0].getName().equals("java.math.BigDecimal")) {
                     if (priceValue instanceof Number) {
                         args[0] = new java.math.BigDecimal(priceValue.toString());
-                        System.err.println("DEBUG REGISTRY: Converted price to BigDecimal: " + args[0]);
                     } else {
-                        System.err.println("DEBUG REGISTRY: Cannot convert price to BigDecimal");
                         return false;
                     }
                 } else {
-                    System.err.println("DEBUG REGISTRY: First param is not BigDecimal: " + paramTypes[0]);
                     return false;
                 }
-                
+
                 // Convert size to BigDecimal
                 if (paramTypes[1].getName().equals("java.math.BigDecimal")) {
                     if (sizeValue instanceof Number) {
                         args[1] = new java.math.BigDecimal(sizeValue.toString());
-                        System.err.println("DEBUG REGISTRY: Converted size to BigDecimal: " + args[1]);
                     } else {
-                        System.err.println("DEBUG REGISTRY: Cannot convert size to BigDecimal");
                         return false;
                     }
                 } else {
-                    System.err.println("DEBUG REGISTRY: Second param is not BigDecimal: " + paramTypes[1]);
                     return false;
                 }
-                
+
                 // Convert time to Instant
                 if (paramTypes[2].getName().equals("java.time.Instant")) {
                     if (timeValue instanceof String) {
                         args[2] = java.time.Instant.parse((String) timeValue);
-                        System.err.println("DEBUG REGISTRY: Converted time to Instant: " + args[2]);
                     } else {
-                        System.err.println("DEBUG REGISTRY: Cannot convert time to Instant");
                         return false;
                     }
                 } else {
-                    System.err.println("DEBUG REGISTRY: Third param is not Instant: " + paramTypes[2]);
                     return false;
                 }
-                
-                System.err.println("DEBUG REGISTRY: Successfully mapped all Ask parameters");
+
                 return true;
                 
             } catch (Exception e) {
-                System.err.println("DEBUG REGISTRY: Exception during Ask conversion: " + e.getMessage());
-                e.printStackTrace();
                 return false;
             }
         }
@@ -643,7 +599,6 @@ public class NodeTypeRegistry {
         List<Object> values = new ArrayList<>(data.values());
         
         if (values.size() != paramTypes.length) {
-            System.err.println("DEBUG REGISTRY: Parameter count mismatch: " + values.size() + " vs " + paramTypes.length);
             return false;
         }
         
@@ -698,35 +653,28 @@ public class NodeTypeRegistry {
      */
     private static boolean tryMapParametersEnhanced(Map<String, Object> parameters, Class<?>[] paramTypes, Object[] args) {
         if (parameters.size() != paramTypes.length) {
-            System.err.println("DEBUG REGISTRY: Parameter count mismatch: " + parameters.size() + " vs " + paramTypes.length);
             return false;
         }
-        
+
         // For HardcodeAttributeProvider(FalconResourceId rid, Object data), map by parameter names
         if (paramTypes.length == 2 && parameters.containsKey("rid") && parameters.containsKey("data")) {
             Object ridValue = parameters.get("rid");
             Object dataValue = parameters.get("data");
-            
-            System.err.println("DEBUG REGISTRY: Mapping by parameter names - rid: " + (ridValue != null ? ridValue.getClass().getSimpleName() : "null") + ", data: " + (dataValue != null ? dataValue.getClass().getSimpleName() : "null"));
-            
+
             // First parameter should be rid (FalconResourceId)
             if (paramTypes[0].getSimpleName().equals("FalconResourceId") && ridValue != null && ridValue.getClass().getSimpleName().equals("FalconResourceId")) {
                 args[0] = ridValue;
-                System.err.println("DEBUG REGISTRY: Mapped rid to param 0");
             } else {
-                System.err.println("DEBUG REGISTRY: Cannot map rid to param 0: expected " + paramTypes[0].getSimpleName() + ", got " + (ridValue != null ? ridValue.getClass().getSimpleName() : "null"));
                 return false;
             }
-            
+
             // Second parameter should be data (Object)
             if (paramTypes[1] == Object.class) {
                 args[1] = dataValue;
-                System.err.println("DEBUG REGISTRY: Mapped data to param 1");
             } else {
-                System.err.println("DEBUG REGISTRY: Cannot map data to param 1: expected " + paramTypes[1].getSimpleName() + ", got Object");
                 return false;
             }
-            
+
             return true;
         }
         
@@ -736,14 +684,11 @@ public class NodeTypeRegistry {
         for (int i = 0; i < paramTypes.length; i++) {
             Object value = values.get(i);
             Class<?> paramType = paramTypes[i];
-            
-            System.err.println("DEBUG REGISTRY: Mapping param " + i + ": " + (value != null ? value.getClass().getSimpleName() : "null") + " to " + paramType.getSimpleName());
-            
+
             if (value == null) {
                 args[i] = null;
             } else if (paramType.isAssignableFrom(value.getClass())) {
                 args[i] = value;
-                System.err.println("DEBUG REGISTRY: Direct assignment");
             } else if (paramType == String.class && value instanceof String) {
                 args[i] = value;
             } else if (paramType == double.class && value instanceof Number) {
@@ -767,7 +712,6 @@ public class NodeTypeRegistry {
             } else if (paramType == Boolean.class && value instanceof Boolean) {
                 args[i] = value;
             } else {
-                System.err.println("DEBUG REGISTRY: Type mismatch for param " + i + ": " + value.getClass() + " vs " + paramType);
                 return false; // Type mismatch
             }
         }

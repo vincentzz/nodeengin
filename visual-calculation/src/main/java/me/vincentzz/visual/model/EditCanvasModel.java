@@ -4,6 +4,7 @@ import me.vincentzz.graph.node.builder.NodeBuilder;
 import me.vincentzz.graph.node.builder.NodeGroupBuilder;
 import me.vincentzz.graph.node.CalculationNode;
 import me.vincentzz.graph.node.NodeGroup;
+import me.vincentzz.lang.PathUtils;
 
 import java.nio.file.Path;
 import java.util.*;
@@ -85,9 +86,9 @@ public class EditCanvasModel {
 
                 // Only show connections between visible nodes
                 String sourceName = sourcePath.getFileName() != null ?
-                                   sourcePath.getFileName().toString() : sourcePath.toString();
+                                   sourcePath.getFileName().toString() : PathUtils.toUnixString(sourcePath);
                 String targetName = targetPath.getFileName() != null ?
-                                   targetPath.getFileName().toString() : targetPath.toString();
+                                   targetPath.getFileName().toString() : PathUtils.toUnixString(targetPath);
 
                 if (visibleNodeNames.contains(sourceName) && visibleNodeNames.contains(targetName)) {
                     ConnectionViewModel connection = new ConnectionViewModel(
