@@ -1,43 +1,25 @@
 package me.vincentzz.graph.demo;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.module.SimpleModule;
 import me.vincentzz.falcon.ifo.FalconResourceId;
 import me.vincentzz.falcon.attribute.Bid;
-import me.vincentzz.graph.ResourceIdentifier;
-import me.vincentzz.graph.json.ResourceIdentifierJsonSerializer;
+import me.vincentzz.graph.json.ConstructionalJsonUtil;
 
 /**
- * Test to verify that the duplication issue in FalconResourceId JSON serialization is fixed.
+ * Test to verify that FalconResourceId JSON serialization works correctly.
  */
 public class DuplicationFixTestDemo {
-    
+
     public static void main(String[] args) {
-        System.out.println("=== Testing FalconResourceId Duplication Fix ===\n");
-        
+        System.out.println("=== Testing FalconResourceId Serialization ===\n");
+
         try {
             // Create a FalconResourceId
             FalconResourceId rid = FalconResourceId.of("GOOGLE", "HARDCODED", Bid.class);
-            
-            // Create ObjectMapper with the ResourceIdentifier serializer
-            ObjectMapper mapper = new ObjectMapper();
-            mapper.enable(SerializationFeature.INDENT_OUTPUT);
-            
-            SimpleModule module = new SimpleModule("ResourceIdentifierModule");
-            ResourceIdentifierJsonSerializer serializer = new ResourceIdentifierJsonSerializer();
-            module.addSerializer(ResourceIdentifier.class, serializer);
-            mapper.registerModule(module);
-            
-            // Add mixin to force Jackson to use custom serializer for FalconResourceId
-            mapper.addMixIn(FalconResourceId.class, me.vincentzz.graph.json.ResourceIdentifierMixin.class);
-            
-            System.out.println("Registered serializer: " + serializer);
-            System.out.println("Module registered successfully");
-            
-            // Serialize to JSON
-            System.out.println("About to serialize: " + rid + " (class: " + rid.getClass().getName() + ")");
-            String json = mapper.writeValueAsString(rid);
+
+            // Use the standard ObjectMapper from ConstructionalJsonUtil
+            String json = ConstructionalJsonUtil.getObjectMapper()
+                    .writerWithDefaultPrettyPrinter()
+                    .writeValueAsString(rid);
             System.out.println("Serialized FalconResourceId JSON:");
             System.out.println(json);
             

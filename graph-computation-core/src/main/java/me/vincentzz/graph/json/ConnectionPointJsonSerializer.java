@@ -3,6 +3,7 @@ package me.vincentzz.graph.json;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.SerializerProvider;
+import me.vincentzz.graph.model.ResourceIdentifier;
 import me.vincentzz.graph.node.ConnectionPoint;
 import me.vincentzz.lang.PathUtils;
 
@@ -10,30 +11,17 @@ import java.io.IOException;
 
 /**
  * JSON serializer for ConnectionPoint.
- * Serializes ConnectionPoint as structured object with nodePath and resourceId.
+ * Produces: {"nodePath": "/root/node", "rid": {"type": "FalconResourceId", "data": {...}}}
  */
 public class ConnectionPointJsonSerializer extends JsonSerializer<ConnectionPoint> {
-    
+
     @Override
-    public void serialize(ConnectionPoint connectionPoint, JsonGenerator gen, SerializerProvider serializers) throws IOException {
+    public void serialize(ConnectionPoint cp, JsonGenerator gen, SerializerProvider serializers) throws IOException {
         gen.writeStartObject();
-        
-        // Serialize nodePath as string
-        gen.writeStringField("nodePath", PathUtils.toUnixString(connectionPoint.nodePath()));
-        
-        // Serialize resourceId using registered ResourceIdentifier serializer
-        gen.writeFieldName("resourceId");
-        try {
-            JsonSerializer<Object> ridSerializer = serializers.findValueSerializer(connectionPoint.rid().getClass());
-            ridSerializer.serialize(connectionPoint.rid(), gen, serializers);
-        } catch (Exception e) {
-            // Fallback: serialize as simple object with type and data
-            gen.writeStartObject();
-            gen.writeStringField("type", connectionPoint.rid().getClass().getSimpleName());
-            gen.writeStringField("data", connectionPoint.rid().toString());
-            gen.writeEndObject();
-        }
-        
+        gen.writeStringField("nodePath", PathUtils.toUnixString(cp.nodePath()));
+        gen.writeFieldName("rid");
+        serializers.findValueSerializer(ResourceIdentifier.class)
+                .serialize(cp.rid(), gen, serializers);
         gen.writeEndObject();
     }
 }

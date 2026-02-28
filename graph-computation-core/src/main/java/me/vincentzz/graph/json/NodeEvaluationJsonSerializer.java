@@ -13,50 +13,62 @@ import java.util.Map;
 
 /**
  * JSON serializer for NodeEvaluation.
- * Serializes Maps with ResourceIdentifier keys as entry lists for better JSON compatibility.
+ * Produces flattened input/output arrays:
+ * {
+ *   "inputs": [{"rid": {...}, "sourceType": "...", "directInput": null, "result": {...}}, ...],
+ *   "outputs": [{"rid": {...}, "resultType": "...", "result": {...}}, ...]
+ * }
  */
 public class NodeEvaluationJsonSerializer extends JsonSerializer<NodeEvaluation> {
-    
+
     @Override
-    public void serialize(NodeEvaluation nodeEvaluation, JsonGenerator gen, SerializerProvider serializers) throws IOException {
+    public void serialize(NodeEvaluation eval, JsonGenerator gen, SerializerProvider serializers) throws IOException {
         gen.writeStartObject();
-        
-        // Serialize inputs as entry list
-        gen.writeFieldName("inputs");
-        gen.writeStartArray();
-        for (Map.Entry<ResourceIdentifier, InputResult> entry : nodeEvaluation.inputs().entrySet()) {
+
+        // Flattened inputs
+        gen.writeArrayFieldStart("inputs");
+        for (Map.Entry<ResourceIdentifier, InputResult> entry : eval.inputs().entrySet()) {
             gen.writeStartObject();
-            
-            gen.writeFieldName("key");
-            serializers.findValueSerializer(ResourceIdentifier.class).serialize(entry.getKey(), gen, serializers);
-            
-            gen.writeFieldName("value");
-            // Use our custom serializer directly instead of findValueSerializer to avoid Jackson record handling
-            InputResultJsonSerializer inputResultSerializer = new InputResultJsonSerializer();
-            inputResultSerializer.serialize(entry.getValue(), gen, serializers);
-            
+
+            gen.writeFieldName("rid");
+            serializers.findValueSerializer(ResourceIdentifier.class)
+                    .serialize(entry.getKey(), gen, serializers);
+
+            gen.writeStringField("sourceType", entry.getValue().inputContext().sourceType().name());
+
+            if (entry.getValue().inputContext().isDirectInput().isPresent()) {
+                gen.writeBooleanField("directInput", entry.getValue().inputContext().isDirectInput().get());
+            } else {
+                gen.writeNullField("directInput");
+            }
+
+            gen.writeFieldName("result");
+            serializers.findValueSerializer(entry.getValue().value().getClass())
+                    .serialize(entry.getValue().value(), gen, serializers);
+
             gen.writeEndObject();
         }
         gen.writeEndArray();
-        
-        // Serialize outputs as entry list
-        gen.writeFieldName("outputs");
-        gen.writeStartArray();
-        for (Map.Entry<ResourceIdentifier, OutputResult> entry : nodeEvaluation.outputs().entrySet()) {
+
+        // Flattened outputs
+        gen.writeArrayFieldStart("outputs");
+        for (Map.Entry<ResourceIdentifier, OutputResult> entry : eval.outputs().entrySet()) {
             gen.writeStartObject();
-            
-            gen.writeFieldName("key");
-            serializers.findValueSerializer(ResourceIdentifier.class).serialize(entry.getKey(), gen, serializers);
-            
-            gen.writeFieldName("value");
-            // Use our custom serializer directly instead of findValueSerializer to avoid Jackson record handling
-            OutputResultJsonSerializer outputResultSerializer = new OutputResultJsonSerializer();
-            outputResultSerializer.serialize(entry.getValue(), gen, serializers);
-            
+
+            gen.writeFieldName("rid");
+            serializers.findValueSerializer(ResourceIdentifier.class)
+                    .serialize(entry.getKey(), gen, serializers);
+
+            gen.writeStringField("resultType", entry.getValue().outputContext().resultType().name());
+
+            gen.writeFieldName("result");
+            serializers.findValueSerializer(entry.getValue().value().getClass())
+                    .serialize(entry.getValue().value(), gen, serializers);
+
             gen.writeEndObject();
         }
         gen.writeEndArray();
-        
+
         gen.writeEndObject();
     }
 }

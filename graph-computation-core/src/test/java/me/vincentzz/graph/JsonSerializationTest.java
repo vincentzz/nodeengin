@@ -17,49 +17,78 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Test JSON serialization round-trip to verify the "nodePath" field fix
+ * Test JSON serialization round-trip for the new format.
  */
 public class JsonSerializationTest {
-    
+
     @BeforeEach
     void setUp() {
-        // Register node types
         NodeTypeRegistry.registerNodeType("NodeGroup", NodeGroup.class);
         NodeTypeRegistry.registerResourceType("BasicResourceIdentifier", BasicResourceIdentifier.class);
     }
 
     @Test
     void testJsonRoundTripWithFlywires() {
-        // Create a simple test scenario with flywires that contain ConnectionPoints
         BasicResourceIdentifier testResource = new BasicResourceIdentifier("test", String.class);
-        
-        // Create a NodeGroup with flywires to test the serialization
+
         Flywire testFlywire = Flywire.of(
                 ConnectionPoint.of(Path.of("/source/node"), testResource),
                 ConnectionPoint.of(Path.of("/target/node"), testResource)
         );
-        
-        NodeGroup testGroup = NodeGroup.of("testGroup", Set.of(), Set.of(testFlywire), 
+
+        NodeGroup testGroup = NodeGroup.of("testGroup", Set.of(), Set.of(testFlywire),
                 Exclude.of(Set.of(ConnectionPoint.of(Path.of("/test"), testResource))));
 
-        // Test serialization to JSON
         Result<String> jsonResult = ConstructionalJsonUtil.toJson(testGroup);
         assertTrue(jsonResult.isSuccess(), "JSON serialization should succeed");
-        
-        String json = jsonResult.get();
-        System.out.println("Serialized JSON: " + json);
-        
-        // Verify the JSON contains "nodePath" fields (not "node" fields)
-        assertTrue(json.contains("\"nodePath\""), "JSON should contain 'nodePath' fields");
-        assertFalse(json.contains("\"node\":"), "JSON should not contain old 'node' field format");
 
-        // Test deserialization from JSON
+        String json = jsonResult.get();
+
+        // Verify new format: "rid" field, not "resourceId"
+        assertTrue(json.contains("\"rid\""), "JSON should contain 'rid' fields");
+        // Verify new format: "nodePath" field
+        assertTrue(json.contains("\"nodePath\""), "JSON should contain 'nodePath' fields");
+        // Verify new scope format: {"exclude": [...]} not {"type": "Exclude", "values": [...]}
+        assertTrue(json.contains("\"exclude\""), "JSON should contain 'exclude' scope key");
+        assertFalse(json.contains("\"values\""), "JSON should not contain old 'values' scope field");
+        // Verify new format: type+data wrapper for ResourceIdentifier
+        assertTrue(json.contains("\"type\" : \"BasicResourceIdentifier\""), "JSON should contain type field for ResourceIdentifier");
+        assertTrue(json.contains("\"data\""), "JSON should contain data field for ResourceIdentifier");
+
+        // Test round-trip deserialization
         Result<CalculationNode> nodeResult = ConstructionalJsonUtil.fromJson(json);
-        assertTrue(nodeResult.isSuccess(), "JSON deserialization should succeed without 'missing nodePath' error");
-        
+        assertTrue(nodeResult.isSuccess(), "JSON deserialization should succeed");
+
         CalculationNode reconstructedNode = nodeResult.get();
-        
-        // Verify the round-trip worked
         assertEquals(testGroup, reconstructedNode, "Round-trip serialization should preserve object equality");
+    }
+
+    @Test
+    void testEmptyNodeGroupRoundTrip() {
+        NodeGroup emptyGroup = NodeGroup.of("empty", Set.of());
+
+        Result<String> jsonResult = ConstructionalJsonUtil.toJson(emptyGroup);
+        assertTrue(jsonResult.isSuccess());
+
+        String json = jsonResult.get();
+        assertTrue(json.contains("\"type\" : \"NodeGroup\""));
+        assertTrue(json.contains("\"name\" : \"empty\""));
+
+        Result<CalculationNode> nodeResult = ConstructionalJsonUtil.fromJson(json);
+        assertTrue(nodeResult.isSuccess());
+        assertEquals(emptyGroup, nodeResult.get());
+    }
+
+    @Test
+    void testNestedNodeGroupRoundTrip() {
+        NodeGroup inner = NodeGroup.of("inner", Set.of());
+        NodeGroup outer = NodeGroup.of("outer", Set.of(inner));
+
+        Result<String> jsonResult = ConstructionalJsonUtil.toJson(outer);
+        assertTrue(jsonResult.isSuccess());
+
+        Result<CalculationNode> nodeResult = ConstructionalJsonUtil.fromJson(jsonResult.get());
+        assertTrue(nodeResult.isSuccess());
+        assertEquals(outer, nodeResult.get());
     }
 }

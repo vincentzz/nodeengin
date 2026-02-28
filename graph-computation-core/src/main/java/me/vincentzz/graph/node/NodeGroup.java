@@ -1,11 +1,9 @@
 package me.vincentzz.graph.node;
 
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import me.vincentzz.graph.model.ResourceIdentifier;
 import me.vincentzz.graph.scope.Exclude;
 import me.vincentzz.graph.scope.Include;
 import me.vincentzz.graph.scope.Scope;
-import me.vincentzz.graph.json.ConstructionalJsonDeserializer;
 
 import java.nio.file.Path;
 import java.util.*;
@@ -17,7 +15,6 @@ import java.util.stream.Collectors;
  * Output visibility can be controlled via Scope for encapsulation.
  * All evaluation logic is handled by CalculationEngine.
  */
-@JsonDeserialize(using = ConstructionalJsonDeserializer.class)
 public record NodeGroup(
     String name,
     Set<CalculationNode> nodes,

@@ -1,172 +1,113 @@
 package me.vincentzz.graph.json;
 
 import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.JsonNode;
+import me.vincentzz.graph.model.ResourceIdentifier;
 import me.vincentzz.graph.node.CalculationNode;
+import me.vincentzz.graph.node.ConnectionPoint;
+import me.vincentzz.graph.node.Flywire;
+import me.vincentzz.graph.node.NodeGroup;
+import me.vincentzz.graph.scope.Exclude;
+import me.vincentzz.graph.scope.Include;
+import me.vincentzz.graph.scope.Scope;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.*;
 
 /**
- * Constructional JSON deserializer for CalculationNodes.
- * Uses NodeTypeRegistry to reconstruct nodes from JSON.
+ * Constructional JSON deserializer for CalculationNodes (Graph Definition schema).
+ *
+ * Consumes the new format where:
+ * - NodeGroup: {"type":"NodeGroup","name":"root","nodes":[...],"flywires":[...],"exports":{"exclude":[]}}
+ * - AtomicNode: {"type":"MidSpreadCalculator","params":[{"ifo":"GOOGLE","source":"FALCON"}, ...]}
  */
 public class ConstructionalJsonDeserializer extends JsonDeserializer<CalculationNode> {
-    
+
     @Override
-    public CalculationNode deserialize(JsonParser p, DeserializationContext ctxt)
-            throws IOException, JsonProcessingException {
+    public CalculationNode deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
         JsonNode node = p.getCodec().readTree(p);
-        return parseCalculationNode(node);
+        return parseNode(node);
     }
-    
-    private CalculationNode parseCalculationNode(JsonNode node) {
+
+    private CalculationNode parseNode(JsonNode node) {
         String type = node.get("type").asText();
 
         if ("NodeGroup".equals(type)) {
-            // Try "parameter" (singular) first - this is the correct format
-            JsonNode parameterNode = node.get("parameter");
-            if (parameterNode != null) {
-                try {
-                    Map<String, Object> parameters = parseNodeGroupParameters(parameterNode);
-                    CalculationNode result = NodeTypeRegistry.createNode(type, parameters);
-                    return result;
-                } catch (Exception e) {
-                    throw e;
-                }
-            }
-            
-            // Handle malformed "parameters" (plural) format for nested NodeGroups
-            JsonNode parametersNode = node.get("parameters");
-            if (parametersNode != null && parametersNode.isArray() && parametersNode.size() >= 1) {
-                // This is an incorrect format where multiple NodeGroups are batched together
-                // We can only handle the first one and warn about the issue
-                JsonNode firstParameter = parametersNode.get(0);
-                Map<String, Object> parameters = parseNodeGroupParameters(firstParameter);
-                
-                if (parametersNode.size() > 1) {
-                    System.err.println("WARNING: Multiple NodeGroups found in 'parameters' array. Only processing the first one. This indicates a serialization issue.");
-                }
-                
-                return NodeTypeRegistry.createNode(type, parameters);
-            }
-            
-            throw new RuntimeException("Invalid NodeGroup format: missing 'parameter' field");
+            return parseNodeGroup(node);
         } else {
-            JsonNode parametersNode = node.get("parameters");
-            try {
-                Map<String, Object> parameters = parseParameterMap(parametersNode);
-                CalculationNode result = NodeTypeRegistry.createNode(type, parameters);
-                return result;
-            } catch (Exception e) {
-                throw e;
-            }
+            // AtomicNode with "params" batching — returns only the first instance
+            // (top-level single atomic node is a batch of one)
+            return parseAtomicNodeBatch(type, node).get(0);
         }
     }
-    
-    private Map<String, Object> parseNodeGroupParameters(JsonNode parameterNode) {
-        Map<String, Object> parameters = new HashMap<>();
-        
-        // Parse name
-        parameters.put("name", parameterNode.get("name").asText());
-        
-        // Parse nodes
-        JsonNode nodesArray = parameterNode.get("nodes");
-        if (nodesArray != null && nodesArray.isArray()) {
-            List<Map<String, Object>> nodesList = new ArrayList<>();
 
-            for (JsonNode nodeSpec : nodesArray) {
-                String nodeType = nodeSpec.get("type").asText();
-                
-                if ("NodeGroup".equals(nodeType)) {
-                    // Handle NodeGroup nodes - they use "parameter" (singular), not "parameters" (plural)
-                    JsonNode nodeParameterSingular = nodeSpec.get("parameter");
-                    if (nodeParameterSingular != null) {
-                        Map<String, Object> nodeGroupInfo = new HashMap<>();
-                        nodeGroupInfo.put("type", "NodeGroup");
-                        nodeGroupInfo.put("parameter", parseNodeGroupParameters(nodeParameterSingular));
-                        nodesList.add(nodeGroupInfo);
-                    } else {
-                        // Fallback: check for malformed "parameters" (plural) format
-                        JsonNode nodeParametersArray = nodeSpec.get("parameters");
-                        if (nodeParametersArray != null && nodeParametersArray.isArray()) {
-                            // Malformed format: multiple NodeGroups batched together in parameters array
-                            for (JsonNode parameterSet : nodeParametersArray) {
-                                Map<String, Object> nodeGroupInfo = new HashMap<>();
-                                nodeGroupInfo.put("type", "NodeGroup");
-                                nodeGroupInfo.put("parameter", parseNodeGroupParameters(parameterSet));
-                                nodesList.add(nodeGroupInfo);
-                                System.err.println("WARNING: Found malformed NodeGroup in 'parameters' array during parsing. Fixed automatically but this indicates a serialization issue.");
-                            }
-                        } else {
-                            throw new RuntimeException("NodeGroup missing parameter field(s)");
-                        }
-                    }
+    private NodeGroup parseNodeGroup(JsonNode node) {
+        String name = node.get("name").asText();
+
+        // Parse child nodes
+        Set<CalculationNode> children = new HashSet<>();
+        JsonNode nodesArray = node.get("nodes");
+        if (nodesArray != null && nodesArray.isArray()) {
+            for (JsonNode childNode : nodesArray) {
+                String childType = childNode.get("type").asText();
+                if ("NodeGroup".equals(childType)) {
+                    children.add(parseNodeGroup(childNode));
                 } else {
-                    // Handle atomic nodes normally
-                    JsonNode nodeParametersArray = nodeSpec.get("parameters");
-                    if (nodeParametersArray != null && nodeParametersArray.isArray()) {
-                        List<Map<String, Object>> parametersList = new ArrayList<>();
-                        for (JsonNode parameterSet : nodeParametersArray) {
-                            parametersList.add(parseParameterMap(parameterSet));
-                        }
-                        Map<String, Object> nodeInfo = new HashMap<>();
-                        nodeInfo.put("type", nodeType);
-                        nodeInfo.put("parameters", parametersList);  // This should be a List
-                        nodesList.add(nodeInfo);
-                    } else {
-                        throw new RuntimeException("Atomic node " + nodeType + " missing parameters field");
-                    }
+                    // AtomicNode batch — may produce multiple nodes
+                    children.addAll(parseAtomicNodeBatch(childType, childNode));
                 }
             }
-            
-            parameters.put("nodes", nodesList);
         }
-        
+
         // Parse flywires
-        JsonNode flywiresArray = parameterNode.get("flywires");
+        Set<Flywire> flywires = new HashSet<>();
+        JsonNode flywiresArray = node.get("flywires");
         if (flywiresArray != null && flywiresArray.isArray()) {
-            List<Map<String, Object>> flywiresList = new ArrayList<>();
-            
             for (JsonNode flywireNode : flywiresArray) {
-                Map<String, Object> flywireParams = new HashMap<>();
-                flywireParams.put("source", parseConnectionPoint(flywireNode.get("source")));
-                flywireParams.put("target", parseConnectionPoint(flywireNode.get("target")));
-                flywiresList.add(flywireParams);
+                ConnectionPoint source = ConnectionPointJsonDeserializer.deserializeFromNode(flywireNode.get("source"));
+                ConnectionPoint target = ConnectionPointJsonDeserializer.deserializeFromNode(flywireNode.get("target"));
+                flywires.add(new Flywire(source, target));
             }
-            
-            parameters.put("flywires", flywiresList);
         }
-        
-        // Parse exports
-        JsonNode exportsNode = parameterNode.get("exports");
-        if (exportsNode != null) {
-            parameters.put("exports", parseScope(exportsNode));
-        }
-        
-        return parameters;
+
+        // Parse exports (scope)
+        Scope<ConnectionPoint> exports = parseScope(node.get("exports"));
+
+        return new NodeGroup(name, children, flywires, exports);
     }
-    
-    private Map<String, Object> parseParameterMap(JsonNode parametersNode) {
-        Map<String, Object> parameters = new HashMap<>();
-        
-        if (parametersNode != null && parametersNode.isObject()) {
-            parametersNode.fields().forEachRemaining(entry -> {
-                String key = entry.getKey();
-                JsonNode valueNode = entry.getValue();
-                Object value = parseJsonValue(valueNode);
-                parameters.put(key, value);
-            });
+
+    private List<CalculationNode> parseAtomicNodeBatch(String typeName, JsonNode node) {
+        List<CalculationNode> nodes = new ArrayList<>();
+
+        JsonNode paramsArray = node.get("params");
+        if (paramsArray != null && paramsArray.isArray()) {
+            for (JsonNode paramSet : paramsArray) {
+                Map<String, Object> params = parseConstructionParams(paramSet);
+                CalculationNode created = NodeTypeRegistry.createNode(typeName, params);
+                nodes.add(created);
+            }
         }
-        
-        return parameters;
+
+        return nodes;
     }
-    
-    private Object parseJsonValue(JsonNode valueNode) {
-        if (valueNode.isTextual()) {
+
+    private Map<String, Object> parseConstructionParams(JsonNode paramNode) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        paramNode.fields().forEachRemaining(entry -> {
+            String key = entry.getKey();
+            JsonNode valueNode = entry.getValue();
+            params.put(key, parseParamValue(valueNode));
+        });
+        return params;
+    }
+
+    private Object parseParamValue(JsonNode valueNode) {
+        if (valueNode.isNull()) {
+            return null;
+        } else if (valueNode.isTextual()) {
             return valueNode.asText();
         } else if (valueNode.isIntegralNumber()) {
             return valueNode.asInt();
@@ -175,93 +116,53 @@ public class ConstructionalJsonDeserializer extends JsonDeserializer<Calculation
         } else if (valueNode.isBoolean()) {
             return valueNode.asBoolean();
         } else if (valueNode.isObject()) {
-            // Check if it's a ResourceIdentifier
-            if (valueNode.has("type") && valueNode.has("parameters")) {
-                return parseResourceIdentifier(valueNode);
-            } else {
-                // Generic object parsing
-                Map<String, Object> objectMap = new HashMap<>();
-                valueNode.fields().forEachRemaining(entry -> {
-                    objectMap.put(entry.getKey(), parseJsonValue(entry.getValue()));
-                });
-                return objectMap;
+            // Could be a ResourceIdentifier (has type+data) or a typed value
+            if (valueNode.has("type") && valueNode.has("data")) {
+                String type = valueNode.get("type").asText();
+                // Check if it's a registered ResourceIdentifier type
+                if (NodeTypeRegistry.isResourceType(type)) {
+                    return ResourceIdentifierJsonDeserializer.deserializeFromNode(valueNode);
+                }
+                // Otherwise it's a typed value (like Ask, Bid etc.)
+                return ResultJsonDeserializer.deserializeTypedValue(valueNode);
             }
+            // Generic object — parse as map
+            Map<String, Object> map = new LinkedHashMap<>();
+            valueNode.fields().forEachRemaining(e -> map.put(e.getKey(), parseParamValue(e.getValue())));
+            return map;
         } else if (valueNode.isArray()) {
-            List<Object> arrayList = new ArrayList<>();
+            List<Object> list = new ArrayList<>();
             for (JsonNode element : valueNode) {
-                arrayList.add(parseJsonValue(element));
+                list.add(parseParamValue(element));
             }
-            return arrayList;
-        } else {
-            return valueNode.asText();
+            return list;
         }
+        return valueNode.asText();
     }
-    
-    private Map<String, Object> parseResourceIdentifier(JsonNode resourceNode) {
-        Map<String, Object> resourceParams = new HashMap<>();
-        resourceParams.put("type", resourceNode.get("type").asText());
-        
-        // Try "data" field first (new format from ConstructionalJsonSerializer)
-        JsonNode dataNode = resourceNode.get("data");
-        if (dataNode != null && dataNode.isObject()) {
-            // Keep the data structure intact - don't flatten
-            Map<String, Object> dataMap = new HashMap<>();
-            dataNode.fields().forEachRemaining(entry -> {
-                String key = entry.getKey();
-                JsonNode valueNode = entry.getValue();
-                Object value = parseJsonValue(valueNode);
-                dataMap.put(key, value);
-            });
-            resourceParams.put("data", dataMap);
-        } else {
-            // Fallback to legacy "parameters" array format
-            JsonNode parametersArray = resourceNode.get("parameters");
-            if (parametersArray != null && parametersArray.isArray()) {
-                List<Object> paramsList = new ArrayList<>();
-                for (JsonNode param : parametersArray) {
-                    paramsList.add(parseJsonValue(param));
-                }
-                resourceParams.put("parameters", paramsList);
+
+    private Scope<ConnectionPoint> parseScope(JsonNode scopeNode) {
+        if (scopeNode == null || scopeNode.isNull()) {
+            return Exclude.of(Set.of());
+        }
+
+        if (scopeNode.has("include")) {
+            Set<ConnectionPoint> points = parseScopeValues(scopeNode.get("include"));
+            return Include.of(points);
+        } else if (scopeNode.has("exclude")) {
+            Set<ConnectionPoint> points = parseScopeValues(scopeNode.get("exclude"));
+            return Exclude.of(points);
+        }
+
+        return Exclude.of(Set.of());
+    }
+
+    private Set<ConnectionPoint> parseScopeValues(JsonNode arrayNode) {
+        Set<ConnectionPoint> points = new HashSet<>();
+        if (arrayNode != null && arrayNode.isArray()) {
+            for (JsonNode cpNode : arrayNode) {
+                points.add(ConnectionPointJsonDeserializer.deserializeFromNode(cpNode));
             }
         }
-        
-        return resourceParams;
-    }
-    
-    private Map<String, Object> parseConnectionPoint(JsonNode connectionPointNode) {
-        Map<String, Object> connectionPointParams = new HashMap<>();
-        // Updated to use nodePath instead of nodeName for filesystem-like path resolution
-        connectionPointParams.put("nodePath", connectionPointNode.get("nodePath").asText());
-        connectionPointParams.put("resourceId", parseResourceIdentifier(connectionPointNode.get("resourceId")));
-        return connectionPointParams;
-    }
-    
-    private Map<String, Object> parseScope(JsonNode scopeNode) {
-        Map<String, Object> scopeParams = new HashMap<>();
-        scopeParams.put("type", scopeNode.get("type").asText());
-        
-        JsonNode valuesArray = scopeNode.get("values");
-        if (valuesArray != null && valuesArray.isArray()) {
-            List<Map<String, Object>> valuesList = new ArrayList<>();
-            
-            for (JsonNode valueNode : valuesArray) {
-                Map<String, Object> valueParams = new HashMap<>();
-                // Support both old format (nodeName) and new format (nodePath) for backward compatibility
-                if (valueNode.has("nodePath")) {
-                    valueParams.put("nodePath", valueNode.get("nodePath").asText());
-                } else if (valueNode.has("nodeName")) {
-                    // Legacy support - convert nodeName to nodePath
-                    valueParams.put("nodePath", valueNode.get("nodeName").asText());
-                } else {
-                    throw new RuntimeException("ConnectionPoint missing both 'nodePath' and 'nodeName' fields");
-                }
-                valueParams.put("resourceId", parseResourceIdentifier(valueNode.get("resourceId")));
-                valuesList.add(valueParams);
-            }
-            
-            scopeParams.put("values", valuesList);
-        }
-        
-        return scopeParams;
+        return points;
     }
 }

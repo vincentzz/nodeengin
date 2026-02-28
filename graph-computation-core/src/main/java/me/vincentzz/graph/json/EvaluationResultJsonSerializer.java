@@ -15,70 +15,62 @@ import java.util.Map;
 
 /**
  * JSON serializer for EvaluationResult.
- * Serializes Maps with object keys as entry lists for better JSON compatibility.
+ * Produces the Evaluation Result schema with:
+ * - nodeEvaluations as a JSON object (path keys → values)
+ * - results as [{"rid": {...}, "result": {...}}, ...]
+ * - graph as an embedded Graph Definition
  */
 public class EvaluationResultJsonSerializer extends JsonSerializer<EvaluationResult> {
-    
+
     @Override
-    public void serialize(EvaluationResult evaluationResult, JsonGenerator gen, SerializerProvider serializers) throws IOException {
+    public void serialize(EvaluationResult er, JsonGenerator gen, SerializerProvider serializers) throws IOException {
         gen.writeStartObject();
-        
-        // Serialize snapshot using registered Snapshot serializer
+
+        // snapshot
         gen.writeFieldName("snapshot");
-        serializers.findValueSerializer(evaluationResult.snapshot().getClass())
-            .serialize(evaluationResult.snapshot(), gen, serializers);
-        
-        // Serialize requestedNodePath as string
-        gen.writeStringField("requestedNodePath", PathUtils.toUnixString(evaluationResult.requestedNodePath()));
-        
-        // Serialize adhocOverride using registered serializer
+        serializers.findValueSerializer(er.snapshot().getClass())
+                .serialize(er.snapshot(), gen, serializers);
+
+        // requestedNodePath
+        gen.writeStringField("requestedNodePath", PathUtils.toUnixString(er.requestedNodePath()));
+
+        // adhocOverride
         gen.writeFieldName("adhocOverride");
-        if (evaluationResult.adhocOverride().isPresent()) {
-            serializers.findValueSerializer(evaluationResult.adhocOverride().get().getClass())
-                .serialize(evaluationResult.adhocOverride().get(), gen, serializers);
+        if (er.adhocOverride().isPresent()) {
+            serializers.findValueSerializer(er.adhocOverride().get().getClass())
+                    .serialize(er.adhocOverride().get(), gen, serializers);
         } else {
             gen.writeNull();
         }
-        
-        // Serialize results as entry list
-        gen.writeFieldName("results");
-        gen.writeStartArray();
-        for (Map.Entry<ResourceIdentifier, Result<Object>> entry : evaluationResult.results().entrySet()) {
+
+        // results — [{"rid": {...}, "result": {...}}, ...]
+        gen.writeArrayFieldStart("results");
+        for (Map.Entry<ResourceIdentifier, Result<Object>> entry : er.results().entrySet()) {
             gen.writeStartObject();
-            
-            gen.writeFieldName("key");
-            serializers.findValueSerializer(ResourceIdentifier.class).serialize(entry.getKey(), gen, serializers);
-            
-            gen.writeFieldName("value");
-            serializers.findValueSerializer(Result.class).serialize(entry.getValue(), gen, serializers);
-            
+            gen.writeFieldName("rid");
+            serializers.findValueSerializer(ResourceIdentifier.class)
+                    .serialize(entry.getKey(), gen, serializers);
+            gen.writeFieldName("result");
+            serializers.findValueSerializer(entry.getValue().getClass())
+                    .serialize(entry.getValue(), gen, serializers);
             gen.writeEndObject();
         }
         gen.writeEndArray();
-        
-        // Serialize nodeEvaluationMap as nested entry list
-        gen.writeFieldName("nodeEvaluationMap");
-        gen.writeStartArray();
-        for (Map.Entry<Path, NodeEvaluation> outerEntry : evaluationResult.nodeEvaluationMap().entrySet()) {
-            gen.writeStartObject();
-            
-            // Outer key is Path
-            gen.writeStringField("key", PathUtils.toUnixString(outerEntry.getKey()));
-            
-            // Outer value is NodeEvaluation - use our custom serializer directly
-            gen.writeFieldName("value");
-            NodeEvaluationJsonSerializer nodeEvaluationSerializer = new NodeEvaluationJsonSerializer();
-            nodeEvaluationSerializer.serialize(outerEntry.getValue(), gen, serializers);
-            
-            gen.writeEndObject();
+
+        // nodeEvaluations — JSON object with path string keys
+        gen.writeObjectFieldStart("nodeEvaluations");
+        for (Map.Entry<Path, NodeEvaluation> entry : er.nodeEvaluationMap().entrySet()) {
+            gen.writeFieldName(PathUtils.toUnixString(entry.getKey()));
+            serializers.findValueSerializer(NodeEvaluation.class)
+                    .serialize(entry.getValue(), gen, serializers);
         }
-        gen.writeEndArray();
-        
-        // Serialize graph using registered CalculationNode serializer
+        gen.writeEndObject();
+
+        // graph — embedded Graph Definition
         gen.writeFieldName("graph");
-        serializers.findValueSerializer(evaluationResult.graph().getClass())
-            .serialize(evaluationResult.graph(), gen, serializers);
-        
+        serializers.findValueSerializer(er.graph().getClass())
+                .serialize(er.graph(), gen, serializers);
+
         gen.writeEndObject();
     }
 }

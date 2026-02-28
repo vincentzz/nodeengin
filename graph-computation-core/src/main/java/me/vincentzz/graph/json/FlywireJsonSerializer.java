@@ -9,24 +9,22 @@ import java.io.IOException;
 
 /**
  * JSON serializer for Flywire.
- * Handles the serialization of flywire objects with source and target ConnectionPoints.
+ * Produces: {"source": {connectionPoint}, "target": {connectionPoint}}
  */
 public class FlywireJsonSerializer extends JsonSerializer<Flywire> {
-    
+
     @Override
     public void serialize(Flywire flywire, JsonGenerator gen, SerializerProvider serializers) throws IOException {
         gen.writeStartObject();
-        
-        // Serialize source ConnectionPoint
+
         gen.writeFieldName("source");
         serializers.findValueSerializer(flywire.source().getClass())
-            .serialize(flywire.source(), gen, serializers);
-        
-        // Serialize target ConnectionPoint
+                .serialize(flywire.source(), gen, serializers);
+
         gen.writeFieldName("target");
         serializers.findValueSerializer(flywire.target().getClass())
-            .serialize(flywire.target(), gen, serializers);
-        
+                .serialize(flywire.target(), gen, serializers);
+
         gen.writeEndObject();
     }
 }

@@ -12,54 +12,55 @@ import java.util.Map;
 
 /**
  * JSON serializer for AdhocOverride.
- * Serializes Maps with object keys as entry lists for better JSON compatibility.
+ * Produces:
+ * {
+ *   "inputs": [{"connectionPoint": {...}, "result": {...}}, ...],
+ *   "outputs": [{"connectionPoint": {...}, "result": {...}}, ...],
+ *   "flywires": [{flywire}, ...]
+ * }
  */
 public class AdhocOverrideJsonSerializer extends JsonSerializer<AdhocOverride> {
-    
+
     @Override
-    public void serialize(AdhocOverride adhocOverride, JsonGenerator gen, SerializerProvider serializers) throws IOException {
+    public void serialize(AdhocOverride adhoc, JsonGenerator gen, SerializerProvider serializers) throws IOException {
         gen.writeStartObject();
-        
-        // Serialize adhocInputs as entry list
-        gen.writeFieldName("adhocInputs");
-        gen.writeStartArray();
-        for (Map.Entry<ConnectionPoint, Result<Object>> entry : adhocOverride.adhocInputs().entrySet()) {
+
+        // inputs (was adhocInputs)
+        gen.writeArrayFieldStart("inputs");
+        for (Map.Entry<ConnectionPoint, Result<Object>> entry : adhoc.adhocInputs().entrySet()) {
             gen.writeStartObject();
-            
-            gen.writeFieldName("key");
-            serializers.findValueSerializer(ConnectionPoint.class).serialize(entry.getKey(), gen, serializers);
-            
-            gen.writeFieldName("value");
-            serializers.findValueSerializer(Result.class).serialize(entry.getValue(), gen, serializers);
-            
+            gen.writeFieldName("connectionPoint");
+            serializers.findValueSerializer(ConnectionPoint.class)
+                    .serialize(entry.getKey(), gen, serializers);
+            gen.writeFieldName("result");
+            serializers.findValueSerializer(entry.getValue().getClass())
+                    .serialize(entry.getValue(), gen, serializers);
             gen.writeEndObject();
         }
         gen.writeEndArray();
-        
-        // Serialize adhocOutputs as entry list
-        gen.writeFieldName("adhocOutputs");
-        gen.writeStartArray();
-        for (Map.Entry<ConnectionPoint, Result<Object>> entry : adhocOverride.adhocOutputs().entrySet()) {
+
+        // outputs (was adhocOutputs)
+        gen.writeArrayFieldStart("outputs");
+        for (Map.Entry<ConnectionPoint, Result<Object>> entry : adhoc.adhocOutputs().entrySet()) {
             gen.writeStartObject();
-            
-            gen.writeFieldName("key");
-            serializers.findValueSerializer(ConnectionPoint.class).serialize(entry.getKey(), gen, serializers);
-            
-            gen.writeFieldName("value");
-            serializers.findValueSerializer(Result.class).serialize(entry.getValue(), gen, serializers);
-            
+            gen.writeFieldName("connectionPoint");
+            serializers.findValueSerializer(ConnectionPoint.class)
+                    .serialize(entry.getKey(), gen, serializers);
+            gen.writeFieldName("result");
+            serializers.findValueSerializer(entry.getValue().getClass())
+                    .serialize(entry.getValue(), gen, serializers);
             gen.writeEndObject();
         }
         gen.writeEndArray();
-        
-        // Serialize adhocFlywires as array of properly serialized Flywire objects
-        gen.writeFieldName("adhocFlywires");
-        gen.writeStartArray();
-        for (me.vincentzz.graph.node.Flywire flywire : adhocOverride.adhocFlywires()) {
-            serializers.findValueSerializer(me.vincentzz.graph.node.Flywire.class).serialize(flywire, gen, serializers);
+
+        // flywires (was adhocFlywires)
+        gen.writeArrayFieldStart("flywires");
+        for (var flywire : adhoc.adhocFlywires()) {
+            serializers.findValueSerializer(flywire.getClass())
+                    .serialize(flywire, gen, serializers);
         }
         gen.writeEndArray();
-        
+
         gen.writeEndObject();
     }
 }
