@@ -8,12 +8,9 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
-import me.vincentzz.falcon.attribute.MidPrice;
-import me.vincentzz.falcon.attribute.Spread;
-import me.vincentzz.falcon.ifo.FalconResourceId;
 import me.vincentzz.graph.CalculationEngine;
 import me.vincentzz.graph.model.AdhocOverride;
-import me.vincentzz.graph.model.EvaluationResult;
+import me.vincentzz.graph.model.EvaluationBundle;
 import me.vincentzz.graph.model.Snapshot;
 import me.vincentzz.graph.node.builder.NodeBuilder;
 import me.vincentzz.graph.node.builder.NodeGroupBuilder;
@@ -21,9 +18,7 @@ import me.vincentzz.graph.node.CalculationNode;
 import me.vincentzz.graph.node.ConnectionPoint;
 import me.vincentzz.graph.node.Flywire;
 import me.vincentzz.graph.node.NodeGroup;
-import me.vincentzz.graph.scope.Exclude;
-import me.vincentzz.graph.scope.Include;
-import me.vincentzz.graph.scope.Scope;
+import me.vincentzz.graph.scope.*;
 import me.vincentzz.graph.json.ConstructionalJsonUtil;
 import me.vincentzz.graph.json.NodeTypeRegistry;
 import me.vincentzz.visual.model.EditCanvasModel;
@@ -96,7 +91,7 @@ public class EditNodeWindow extends Stage {
     private Button createGroupButton;
     
     // Events
-    private Consumer<EvaluationResult> onRunCompleted;
+    private Consumer<EvaluationBundle> onRunCompleted;
     private Runnable onCancel;
     
     /**
@@ -682,10 +677,10 @@ public class EditNodeWindow extends Stage {
             Set<ConnectionPoint> points;
             if (scope instanceof Include<ConnectionPoint> inc) {
                 modeText = "Include";
-                points = inc.resources();
+                points = inc.scopeSet() instanceof FullSet<ConnectionPoint> fs ? fs.elements() : Set.of();
             } else if (scope instanceof Exclude<ConnectionPoint> exc) {
                 modeText = "Exclude";
-                points = exc.resources();
+                points = exc.scopeSet() instanceof FullSet<ConnectionPoint> fs ? fs.elements() : Set.of();
             } else {
                 modeText = "Unknown";
                 points = Set.of();
@@ -1368,13 +1363,13 @@ public class EditNodeWindow extends Stage {
             
             // Create evaluation engine and evaluate
             CalculationEngine engine = new CalculationEngine(modifiedGraph);
-            
+
             // Evaluate with modified parameters including the parsed requested resources
             var newEvaluationResult = engine.evaluateForResult(modifiedRequestPath, modifiedSnapshot, modifiedRequestedResources, modifiedAdhocOverride);
-            
-            // Notify completion
+
+            // Notify completion with bundle (graph + result)
             if (onRunCompleted != null) {
-                onRunCompleted.accept(newEvaluationResult);
+                onRunCompleted.accept(new EvaluationBundle(modifiedGraph, newEvaluationResult));
             }
             
             close();
@@ -1531,7 +1526,7 @@ public class EditNodeWindow extends Stage {
     }
     
     // Event setters
-    public void setOnRunCompleted(Consumer<EvaluationResult> onRunCompleted) {
+    public void setOnRunCompleted(Consumer<EvaluationBundle> onRunCompleted) {
         this.onRunCompleted = onRunCompleted;
     }
     

@@ -9,9 +9,7 @@
     <version>1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
     <modules>
-        <module>calculation-canvas</module>
         <module>graph-computation-core</module>
-        <module>graph-demo</module>
         <module>falcon-calculation-kit</module>
         <module>visual-calculation</module>
     </modules>

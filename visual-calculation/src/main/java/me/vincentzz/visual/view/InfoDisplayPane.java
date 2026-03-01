@@ -150,7 +150,7 @@ public class InfoDisplayPane extends VBox {
     }
     
     private void updateRequestPath() {
-        Path requestedPath = evaluationResult.requestedNodePath();
+        Path requestedPath = evaluationResult.request().path();
         requestPathLabel.setText(requestedPath != null ? PathUtils.toUnixString(requestedPath) : "Unknown");
     }
     
@@ -158,7 +158,7 @@ public class InfoDisplayPane extends VBox {
         StringBuilder sb = new StringBuilder();
         
         // Add requested node path at the top of the left pane
-        Path requestedPath = evaluationResult.requestedNodePath();
+        Path requestedPath = evaluationResult.request().path();
         sb.append("Requested Node Path: ").append(requestedPath != null ? PathUtils.toUnixString(requestedPath) : "Unknown").append("\n\n");
         
         // Add requested resource IDs section
@@ -178,12 +178,12 @@ public class InfoDisplayPane extends VBox {
             sb.append("\n");
         }
         
-        if (evaluationResult.adhocOverride().isEmpty()) {
+        if (evaluationResult.request().override().isEmpty()) {
             sb.append("Adhoc Inputs:\n  (empty)\n\n");
             sb.append("Adhoc Outputs:\n  (empty)\n\n");
             sb.append("Adhoc Flywires:\n  (empty)");
         } else {
-            AdhocOverride override = evaluationResult.adhocOverride().get();
+            AdhocOverride override = evaluationResult.request().override().get();
             
             // Adhoc Inputs - always show section
             sb.append("Adhoc Inputs:\n");
@@ -302,11 +302,11 @@ public class InfoDisplayPane extends VBox {
         String ridStr = rid.toString();
         
         // Look for common patterns and simplify display
-        if (ridStr.contains("FalconResourceId")) {
-            // Extract ifo, source, attribute from FalconResourceId
+        if (ridStr.contains("FalconRawTopic")) {
+            // Extract symbol, source, attribute from FalconRawTopic
             String simplified = ridStr
-                .replaceAll(".*ifo=([^,\\]]+).*", "$1")
-                .replaceAll(".*source=([^,\\]]+).*", "$1") 
+                .replaceAll(".*symbol=([^,\\]]+).*", "$1")
+                .replaceAll(".*source=([^,\\]]+).*", "$1")
                 .replaceAll(".*attribute=([^,\\]]+).*", "$1");
             
             if (!simplified.equals(ridStr)) {
@@ -321,11 +321,11 @@ public class InfoDisplayPane extends VBox {
         // Return full ResourceIdentifier information without truncation
         String ridStr = rid.toString();
         
-        // Parse FalconResourceId for detailed display
-        if (ridStr.contains("FalconResourceId")) {
+        // Parse FalconRawTopic for detailed display
+        if (ridStr.contains("FalconRawTopic")) {
             try {
                 // Extract structured information
-                String ifo = ridStr.replaceAll(".*ifo=([^,\\]]+).*", "$1");
+                String symbol = ridStr.replaceAll(".*symbol=([^,\\]]+).*", "$1");
                 String source = ridStr.replaceAll(".*source=([^,\\]]+).*", "$1");
                 String attribute = ridStr.replaceAll(".*attribute=([^,\\]]+).*", "$1");
                 
@@ -339,7 +339,7 @@ public class InfoDisplayPane extends VBox {
                     }
                 }
                 
-                return String.format("FalconResourceId[ifo=%s, source=%s, attribute=%s]", ifo, source, attribute);
+                return String.format("FalconRawTopic[symbol=%s, source=%s, attribute=%s]", symbol, source, attribute);
             } catch (Exception e) {
                 // Fall back to original string if parsing fails
                 return ridStr;

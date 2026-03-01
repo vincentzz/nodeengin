@@ -8,9 +8,7 @@ import javafx.scene.text.FontWeight;
 import me.vincentzz.graph.model.ResourceIdentifier;
 import me.vincentzz.graph.node.CalculationNode;
 import me.vincentzz.graph.node.ConnectionPoint;
-import me.vincentzz.graph.scope.Exclude;
-import me.vincentzz.graph.scope.Include;
-import me.vincentzz.graph.scope.Scope;
+import me.vincentzz.graph.scope.*;
 import me.vincentzz.lang.PathUtils;
 import me.vincentzz.visual.util.ColorScheme;
 
@@ -64,9 +62,10 @@ public class EditScopeDialog extends Dialog<Scope<ConnectionPoint>> {
         excludeRadio.setSelected(!isInclude);
 
         // Determine currently-scoped ConnectionPoints
-        Set<ConnectionPoint> scopedPoints = isInclude
-            ? ((Include<ConnectionPoint>) currentScope).resources()
-            : ((Exclude<ConnectionPoint>) currentScope).resources();
+        ScopeSet<ConnectionPoint> ss = isInclude
+            ? ((Include<ConnectionPoint>) currentScope).scopeSet()
+            : ((Exclude<ConnectionPoint>) currentScope).scopeSet();
+        Set<ConnectionPoint> scopedPoints = ss instanceof FullSet<ConnectionPoint> fs ? fs.elements() : Set.of();
 
         // Connection points list
         Label cpLabel = new Label("Connection Points:");

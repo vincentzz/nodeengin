@@ -1,6 +1,6 @@
 package me.vincentzz.falcon.node;
 
-import me.vincentzz.falcon.ifo.FalconResourceId;
+import me.vincentzz.falcon.rid.FalconRawTopic;
 import me.vincentzz.graph.model.ResourceIdentifier;
 import me.vincentzz.graph.model.Snapshot;
 import me.vincentzz.graph.node.AtomicNode;
@@ -10,8 +10,8 @@ import me.vincentzz.lang.Result.Success;
 import java.util.Map;
 import java.util.Set;
 
-public record HardcodeAttributeProvider(FalconResourceId rid, Object data) implements AtomicNode {
-    
+public record HardcodeAttributeProvider(FalconRawTopic rid, Object data) implements AtomicNode {
+
     @Override
     public Map<String, Object> getConstructionParameters() {
         return Map.of("rid", rid, "data", data);

@@ -1,7 +1,7 @@
 package me.vincentzz.falcon.node;
 
 import me.vincentzz.falcon.attribute.Ask;
-import me.vincentzz.falcon.ifo.FalconResourceId;
+import me.vincentzz.falcon.rid.FalconRawTopic;
 import me.vincentzz.graph.model.ResourceIdentifier;
 import me.vincentzz.graph.model.Snapshot;
 import me.vincentzz.graph.node.AtomicNode;
@@ -13,11 +13,11 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
 
-public record AskProvider(String ifo, String source) implements AtomicNode {
-    
+public record AskProvider(String symbol, String source) implements AtomicNode {
+
     @Override
     public Map<String, Object> getConstructionParameters() {
-        return Map.of("ifo", ifo, "source", source);
+        return Map.of("symbol", symbol, "source", source);
     }
 
     @Override
@@ -27,7 +27,7 @@ public record AskProvider(String ifo, String source) implements AtomicNode {
 
     @Override
     public Set<ResourceIdentifier> outputs() {
-        return Set.of(FalconResourceId.of(ifo, source, Ask.class));
+        return Set.of(FalconRawTopic.of(symbol, source, Ask.class));
     }
 
     @Override
@@ -41,15 +41,15 @@ public record AskProvider(String ifo, String source) implements AtomicNode {
         BigDecimal askPriceValue = new BigDecimal("100.25"); // Slightly above bid
         Instant time = Instant.now();
         Ask askPrice = new Ask(askPriceValue, BigDecimal.valueOf(2), time);
-        
+
         return Map.of(
-            FalconResourceId.of(ifo, source, Ask.class),
+            FalconRawTopic.of(symbol, source, Ask.class),
             Success.of(askPrice)
         );
     }
 
     @Override
     public String name() {
-        return "ASK_"+ifo;
+        return "ASK_"+symbol;
     }
 }

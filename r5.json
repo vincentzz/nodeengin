@@ -1,0 +1,822 @@
+{
+  "graph" : {
+    "type" : "NodeGroup",
+    "name" : "root",
+    "nodes" : [ {
+      "type" : "NodeGroup",
+      "name" : "rawGroup",
+      "nodes" : [ {
+        "type" : "BidProvider",
+        "params" : [ {
+          "ifo" : "GOOGLE",
+          "source" : "Bloomberg"
+        }, {
+          "ifo" : "APPLE",
+          "source" : "Bloomberg"
+        } ]
+      }, {
+        "type" : "AskProvider",
+        "params" : [ {
+          "ifo" : "GOOGLE",
+          "source" : "Bloomberg"
+        }, {
+          "ifo" : "APPLE",
+          "source" : "Bloomberg"
+        } ]
+      }, {
+        "type" : "HardcodeAttributeProvider",
+        "params" : [ {
+          "data" : {
+            "type" : "Bid",
+            "data" : {
+              "price" : 80,
+              "size" : 1,
+              "time" : "2026-03-01T14:54:23.670599Z"
+            }
+          },
+          "rid" : {
+            "type" : "FalconResourceId",
+            "data" : {
+              "ifo" : "GOOGLE",
+              "source" : "HARDCODED",
+              "attribute" : "Bid"
+            }
+          }
+        } ]
+      } ],
+      "flywires" : [ ],
+      "exports" : {
+        "exclude" : {
+          "type" : "FullSet",
+          "elements" : [ {
+            "nodePath" : "hard",
+            "rid" : {
+              "type" : "FalconResourceId",
+              "data" : {
+                "ifo" : "GOOGLE",
+                "source" : "HARDCODED",
+                "attribute" : "Bid"
+              }
+            }
+          } ]
+        }
+      }
+    }, {
+      "type" : "NodeGroup",
+      "name" : "calGroup",
+      "nodes" : [ {
+        "type" : "MidSpreadCalculator",
+        "params" : [ {
+          "ifo" : "APPLE",
+          "source" : "FALCON"
+        }, {
+          "ifo" : "GOOGLE",
+          "source" : "FALCON"
+        } ]
+      } ],
+      "flywires" : [ {
+        "source" : {
+          "nodePath" : "/root/rawGroup/hard",
+          "rid" : {
+            "type" : "FalconResourceId",
+            "data" : {
+              "ifo" : "GOOGLE",
+              "source" : "HARDCODED",
+              "attribute" : "Bid"
+            }
+          }
+        },
+        "target" : {
+          "nodePath" : "MID_GOOGLE",
+          "rid" : {
+            "type" : "FalconResourceId",
+            "data" : {
+              "ifo" : "GOOGLE",
+              "source" : "Bloomberg",
+              "attribute" : "Bid"
+            }
+          }
+        }
+      } ],
+      "exports" : {
+        "exclude" : {
+          "type" : "FullSet",
+          "elements" : [ ]
+        }
+      }
+    }, {
+      "type" : "HardcodeAttributeProvider",
+      "params" : [ {
+        "data" : {
+          "type" : "Ask",
+          "data" : {
+            "price" : 120,
+            "size" : 1,
+            "time" : "2026-03-01T14:54:23.670607Z"
+          }
+        },
+        "rid" : {
+          "type" : "FalconResourceId",
+          "data" : {
+            "ifo" : "APPLE",
+            "source" : "HARDCODED",
+            "attribute" : "Ask"
+          }
+        }
+      } ]
+    } ],
+    "flywires" : [ ],
+    "exports" : {
+      "exclude" : {
+        "type" : "FullSet",
+        "elements" : [ ]
+      }
+    }
+  },
+  "evaluationResult" : {
+    "request" : {
+      "requestedResourceIds" : [ {
+        "type" : "FalconResourceId",
+        "data" : {
+          "ifo" : "GOOGLE",
+          "source" : "FALCON",
+          "attribute" : "Spread"
+        }
+      }, {
+        "type" : "FalconResourceId",
+        "data" : {
+          "ifo" : "GOOGLE",
+          "source" : "FALCON",
+          "attribute" : "MidPrice"
+        }
+      }, {
+        "type" : "FalconResourceId",
+        "data" : {
+          "ifo" : "APPLE",
+          "source" : "FALCON",
+          "attribute" : "MidPrice"
+        }
+      } ],
+      "snapshot" : {
+        "logicalTimestamp" : null,
+        "physicalTimestamp" : null
+      },
+      "requestedNodePath" : "/root",
+      "adhocOverride" : {
+        "inputs" : [ ],
+        "outputs" : [ {
+          "connectionPoint" : {
+            "nodePath" : "/root/calGroup/MID_GOOGLE",
+            "rid" : {
+              "type" : "FalconResourceId",
+              "data" : {
+                "ifo" : "GOOGLE",
+                "source" : "FALCON",
+                "attribute" : "Spread"
+              }
+            }
+          },
+          "result" : {
+            "success" : {
+              "type" : "Spread",
+              "data" : {
+                "spread" : 1,
+                "time" : "2026-03-01T14:54:23.681641Z"
+              }
+            }
+          }
+        } ],
+        "flywires" : [ {
+          "source" : {
+            "nodePath" : "/root/hard",
+            "rid" : {
+              "type" : "FalconResourceId",
+              "data" : {
+                "ifo" : "APPLE",
+                "source" : "HARDCODED",
+                "attribute" : "Ask"
+              }
+            }
+          },
+          "target" : {
+            "nodePath" : "/root/calGroup",
+            "rid" : {
+              "type" : "FalconResourceId",
+              "data" : {
+                "ifo" : "APPLE",
+                "source" : "Bloomberg",
+                "attribute" : "Ask"
+              }
+            }
+          }
+        } ]
+      }
+    },
+    "results" : [ {
+      "rid" : {
+        "type" : "FalconResourceId",
+        "data" : {
+          "ifo" : "GOOGLE",
+          "source" : "FALCON",
+          "attribute" : "Spread"
+        }
+      },
+      "result" : {
+        "success" : {
+          "type" : "Spread",
+          "data" : {
+            "spread" : 1,
+            "time" : "2026-03-01T14:54:23.681641Z"
+          }
+        }
+      }
+    }, {
+      "rid" : {
+        "type" : "FalconResourceId",
+        "data" : {
+          "ifo" : "GOOGLE",
+          "source" : "FALCON",
+          "attribute" : "MidPrice"
+        }
+      },
+      "result" : {
+        "success" : {
+          "type" : "MidPrice",
+          "data" : {
+            "price" : 90.125,
+            "time" : "2026-03-01T14:54:23.690966Z"
+          }
+        }
+      }
+    }, {
+      "rid" : {
+        "type" : "FalconResourceId",
+        "data" : {
+          "ifo" : "APPLE",
+          "source" : "FALCON",
+          "attribute" : "MidPrice"
+        }
+      },
+      "result" : {
+        "success" : {
+          "type" : "MidPrice",
+          "data" : {
+            "price" : 109.875,
+            "time" : "2026-03-01T14:54:23.692159Z"
+          }
+        }
+      }
+    } ],
+    "evaluations" : {
+      "/root/rawGroup" : {
+        "inputs" : [ ],
+        "outputs" : [ {
+          "rid" : {
+            "type" : "FalconResourceId",
+            "data" : {
+              "ifo" : "APPLE",
+              "source" : "Bloomberg",
+              "attribute" : "Bid"
+            }
+          },
+          "resultType" : "ByEvaluation",
+          "result" : {
+            "success" : {
+              "type" : "Bid",
+              "data" : {
+                "price" : 99.75,
+                "size" : 1,
+                "time" : "2026-03-01T14:54:23.692159Z"
+              }
+            }
+          }
+        }, {
+          "rid" : {
+            "type" : "FalconResourceId",
+            "data" : {
+              "ifo" : "GOOGLE",
+              "source" : "Bloomberg",
+              "attribute" : "Ask"
+            }
+          },
+          "resultType" : "ByEvaluation",
+          "result" : {
+            "success" : {
+              "type" : "Ask",
+              "data" : {
+                "price" : 100.25,
+                "size" : 2,
+                "time" : "2026-03-01T14:54:23.690966Z"
+              }
+            }
+          }
+        } ]
+      },
+      "/root/rawGroup/hard" : {
+        "inputs" : [ ],
+        "outputs" : [ {
+          "rid" : {
+            "type" : "FalconResourceId",
+            "data" : {
+              "ifo" : "GOOGLE",
+              "source" : "HARDCODED",
+              "attribute" : "Bid"
+            }
+          },
+          "resultType" : "ByEvaluation",
+          "result" : {
+            "success" : {
+              "type" : "Bid",
+              "data" : {
+                "price" : 80,
+                "size" : 1,
+                "time" : "2026-03-01T14:54:23.670599Z"
+              }
+            }
+          }
+        } ]
+      },
+      "/root/rawGroup/BID_APPLE" : {
+        "inputs" : [ ],
+        "outputs" : [ {
+          "rid" : {
+            "type" : "FalconResourceId",
+            "data" : {
+              "ifo" : "APPLE",
+              "source" : "Bloomberg",
+              "attribute" : "Bid"
+            }
+          },
+          "resultType" : "ByEvaluation",
+          "result" : {
+            "success" : {
+              "type" : "Bid",
+              "data" : {
+                "price" : 99.75,
+                "size" : 1,
+                "time" : "2026-03-01T14:54:23.692159Z"
+              }
+            }
+          }
+        } ]
+      },
+      "/root/calGroup" : {
+        "inputs" : [ {
+          "rid" : {
+            "type" : "FalconResourceId",
+            "data" : {
+              "ifo" : "APPLE",
+              "source" : "Bloomberg",
+              "attribute" : "Bid"
+            }
+          },
+          "sourceType" : "ByResolve",
+          "directInput" : null,
+          "result" : {
+            "success" : {
+              "type" : "Bid",
+              "data" : {
+                "price" : 99.75,
+                "size" : 1,
+                "time" : "2026-03-01T14:54:23.692159Z"
+              }
+            }
+          }
+        }, {
+          "rid" : {
+            "type" : "FalconResourceId",
+            "data" : {
+              "ifo" : "APPLE",
+              "source" : "FALCON",
+              "attribute" : "Ask"
+            }
+          },
+          "sourceType" : "ByResolve",
+          "directInput" : null,
+          "result" : {
+            "failure" : "cannot find provider for FalconResourceId[ifo='APPLE', source='FALCON', attribute=Ask]"
+          }
+        }, {
+          "rid" : {
+            "type" : "FalconResourceId",
+            "data" : {
+              "ifo" : "APPLE",
+              "source" : "Bloomberg",
+              "attribute" : "Ask"
+            }
+          },
+          "sourceType" : "ByAdhocFlywire",
+          "directInput" : null,
+          "result" : {
+            "success" : {
+              "type" : "Ask",
+              "data" : {
+                "price" : 120,
+                "size" : 1,
+                "time" : "2026-03-01T14:54:23.670607Z"
+              }
+            }
+          }
+        }, {
+          "rid" : {
+            "type" : "FalconResourceId",
+            "data" : {
+              "ifo" : "GOOGLE",
+              "source" : "Bloomberg",
+              "attribute" : "Ask"
+            }
+          },
+          "sourceType" : "ByResolve",
+          "directInput" : null,
+          "result" : {
+            "success" : {
+              "type" : "Ask",
+              "data" : {
+                "price" : 100.25,
+                "size" : 2,
+                "time" : "2026-03-01T14:54:23.690966Z"
+              }
+            }
+          }
+        }, {
+          "rid" : {
+            "type" : "FalconResourceId",
+            "data" : {
+              "ifo" : "GOOGLE",
+              "source" : "FALCON",
+              "attribute" : "Ask"
+            }
+          },
+          "sourceType" : "ByResolve",
+          "directInput" : null,
+          "result" : {
+            "failure" : "cannot find provider for FalconResourceId[ifo='GOOGLE', source='FALCON', attribute=Ask]"
+          }
+        } ],
+        "outputs" : [ {
+          "rid" : {
+            "type" : "FalconResourceId",
+            "data" : {
+              "ifo" : "GOOGLE",
+              "source" : "FALCON",
+              "attribute" : "MidPrice"
+            }
+          },
+          "resultType" : "ByEvaluation",
+          "result" : {
+            "success" : {
+              "type" : "MidPrice",
+              "data" : {
+                "price" : 90.125,
+                "time" : "2026-03-01T14:54:23.690966Z"
+              }
+            }
+          }
+        }, {
+          "rid" : {
+            "type" : "FalconResourceId",
+            "data" : {
+              "ifo" : "GOOGLE",
+              "source" : "FALCON",
+              "attribute" : "Spread"
+            }
+          },
+          "resultType" : "ByEvaluation",
+          "result" : {
+            "success" : {
+              "type" : "Spread",
+              "data" : {
+                "spread" : 1,
+                "time" : "2026-03-01T14:54:23.681641Z"
+              }
+            }
+          }
+        }, {
+          "rid" : {
+            "type" : "FalconResourceId",
+            "data" : {
+              "ifo" : "APPLE",
+              "source" : "FALCON",
+              "attribute" : "MidPrice"
+            }
+          },
+          "resultType" : "ByEvaluation",
+          "result" : {
+            "success" : {
+              "type" : "MidPrice",
+              "data" : {
+                "price" : 109.875,
+                "time" : "2026-03-01T14:54:23.692159Z"
+              }
+            }
+          }
+        } ]
+      },
+      "/root/hard" : {
+        "inputs" : [ ],
+        "outputs" : [ {
+          "rid" : {
+            "type" : "FalconResourceId",
+            "data" : {
+              "ifo" : "APPLE",
+              "source" : "HARDCODED",
+              "attribute" : "Ask"
+            }
+          },
+          "resultType" : "ByEvaluation",
+          "result" : {
+            "success" : {
+              "type" : "Ask",
+              "data" : {
+                "price" : 120,
+                "size" : 1,
+                "time" : "2026-03-01T14:54:23.670607Z"
+              }
+            }
+          }
+        } ]
+      },
+      "/root/rawGroup/ASK_GOOGLE" : {
+        "inputs" : [ ],
+        "outputs" : [ {
+          "rid" : {
+            "type" : "FalconResourceId",
+            "data" : {
+              "ifo" : "GOOGLE",
+              "source" : "Bloomberg",
+              "attribute" : "Ask"
+            }
+          },
+          "resultType" : "ByEvaluation",
+          "result" : {
+            "success" : {
+              "type" : "Ask",
+              "data" : {
+                "price" : 100.25,
+                "size" : 2,
+                "time" : "2026-03-01T14:54:23.690966Z"
+              }
+            }
+          }
+        } ]
+      },
+      "/root" : {
+        "inputs" : [ ],
+        "outputs" : [ {
+          "rid" : {
+            "type" : "FalconResourceId",
+            "data" : {
+              "ifo" : "GOOGLE",
+              "source" : "FALCON",
+              "attribute" : "MidPrice"
+            }
+          },
+          "resultType" : "ByEvaluation",
+          "result" : {
+            "success" : {
+              "type" : "MidPrice",
+              "data" : {
+                "price" : 90.125,
+                "time" : "2026-03-01T14:54:23.690966Z"
+              }
+            }
+          }
+        }, {
+          "rid" : {
+            "type" : "FalconResourceId",
+            "data" : {
+              "ifo" : "GOOGLE",
+              "source" : "FALCON",
+              "attribute" : "Spread"
+            }
+          },
+          "resultType" : "ByEvaluation",
+          "result" : {
+            "success" : {
+              "type" : "Spread",
+              "data" : {
+                "spread" : 1,
+                "time" : "2026-03-01T14:54:23.681641Z"
+              }
+            }
+          }
+        }, {
+          "rid" : {
+            "type" : "FalconResourceId",
+            "data" : {
+              "ifo" : "APPLE",
+              "source" : "FALCON",
+              "attribute" : "MidPrice"
+            }
+          },
+          "resultType" : "ByEvaluation",
+          "result" : {
+            "success" : {
+              "type" : "MidPrice",
+              "data" : {
+                "price" : 109.875,
+                "time" : "2026-03-01T14:54:23.692159Z"
+              }
+            }
+          }
+        } ]
+      },
+      "/root/calGroup/MID_GOOGLE" : {
+        "inputs" : [ {
+          "rid" : {
+            "type" : "FalconResourceId",
+            "data" : {
+              "ifo" : "GOOGLE",
+              "source" : "Bloomberg",
+              "attribute" : "Bid"
+            }
+          },
+          "sourceType" : "ByFlywire",
+          "directInput" : false,
+          "result" : {
+            "success" : {
+              "type" : "Bid",
+              "data" : {
+                "price" : 80,
+                "size" : 1,
+                "time" : "2026-03-01T14:54:23.670599Z"
+              }
+            }
+          }
+        }, {
+          "rid" : {
+            "type" : "FalconResourceId",
+            "data" : {
+              "ifo" : "GOOGLE",
+              "source" : "Bloomberg",
+              "attribute" : "Ask"
+            }
+          },
+          "sourceType" : "ByParentGroup",
+          "directInput" : false,
+          "result" : {
+            "success" : {
+              "type" : "Ask",
+              "data" : {
+                "price" : 100.25,
+                "size" : 2,
+                "time" : "2026-03-01T14:54:23.690966Z"
+              }
+            }
+          }
+        }, {
+          "rid" : {
+            "type" : "FalconResourceId",
+            "data" : {
+              "ifo" : "GOOGLE",
+              "source" : "FALCON",
+              "attribute" : "Ask"
+            }
+          },
+          "sourceType" : "ByParentGroup",
+          "directInput" : true,
+          "result" : {
+            "failure" : "cannot find provider for FalconResourceId[ifo='GOOGLE', source='FALCON', attribute=Ask]"
+          }
+        } ],
+        "outputs" : [ {
+          "rid" : {
+            "type" : "FalconResourceId",
+            "data" : {
+              "ifo" : "GOOGLE",
+              "source" : "FALCON",
+              "attribute" : "MidPrice"
+            }
+          },
+          "resultType" : "ByEvaluation",
+          "result" : {
+            "success" : {
+              "type" : "MidPrice",
+              "data" : {
+                "price" : 90.125,
+                "time" : "2026-03-01T14:54:23.690966Z"
+              }
+            }
+          }
+        }, {
+          "rid" : {
+            "type" : "FalconResourceId",
+            "data" : {
+              "ifo" : "GOOGLE",
+              "source" : "FALCON",
+              "attribute" : "Spread"
+            }
+          },
+          "resultType" : "ByAdhoc",
+          "result" : {
+            "success" : {
+              "type" : "Spread",
+              "data" : {
+                "spread" : 1,
+                "time" : "2026-03-01T14:54:23.681641Z"
+              }
+            }
+          }
+        } ]
+      },
+      "/root/calGroup/MID_APPLE" : {
+        "inputs" : [ {
+          "rid" : {
+            "type" : "FalconResourceId",
+            "data" : {
+              "ifo" : "APPLE",
+              "source" : "Bloomberg",
+              "attribute" : "Bid"
+            }
+          },
+          "sourceType" : "ByParentGroup",
+          "directInput" : false,
+          "result" : {
+            "success" : {
+              "type" : "Bid",
+              "data" : {
+                "price" : 99.75,
+                "size" : 1,
+                "time" : "2026-03-01T14:54:23.692159Z"
+              }
+            }
+          }
+        }, {
+          "rid" : {
+            "type" : "FalconResourceId",
+            "data" : {
+              "ifo" : "APPLE",
+              "source" : "FALCON",
+              "attribute" : "Ask"
+            }
+          },
+          "sourceType" : "ByParentGroup",
+          "directInput" : true,
+          "result" : {
+            "failure" : "cannot find provider for FalconResourceId[ifo='APPLE', source='FALCON', attribute=Ask]"
+          }
+        }, {
+          "rid" : {
+            "type" : "FalconResourceId",
+            "data" : {
+              "ifo" : "APPLE",
+              "source" : "Bloomberg",
+              "attribute" : "Ask"
+            }
+          },
+          "sourceType" : "ByParentGroup",
+          "directInput" : false,
+          "result" : {
+            "success" : {
+              "type" : "Ask",
+              "data" : {
+                "price" : 120,
+                "size" : 1,
+                "time" : "2026-03-01T14:54:23.670607Z"
+              }
+            }
+          }
+        } ],
+        "outputs" : [ {
+          "rid" : {
+            "type" : "FalconResourceId",
+            "data" : {
+              "ifo" : "APPLE",
+              "source" : "FALCON",
+              "attribute" : "Spread"
+            }
+          },
+          "resultType" : "ByEvaluation",
+          "result" : {
+            "success" : {
+              "type" : "Spread",
+              "data" : {
+                "spread" : 20.25,
+                "time" : "2026-03-01T14:54:23.692159Z"
+              }
+            }
+          }
+        }, {
+          "rid" : {
+            "type" : "FalconResourceId",
+            "data" : {
+              "ifo" : "APPLE",
+              "source" : "FALCON",
+              "attribute" : "MidPrice"
+            }
+          },
+          "resultType" : "ByEvaluation",
+          "result" : {
+            "success" : {
+              "type" : "MidPrice",
+              "data" : {
+                "price" : 109.875,
+                "time" : "2026-03-01T14:54:23.692159Z"
+              }
+            }
+          }
+        } ]
+      }
+    }
+  }
+}

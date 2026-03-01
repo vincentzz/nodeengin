@@ -12,7 +12,7 @@ import java.nio.file.Path;
 
 /**
  * JSON deserializer for ConnectionPoint.
- * Consumes: {"nodePath": "/root/node", "rid": {"type": "FalconResourceId", "data": {...}}}
+ * Consumes: {"nodePath": "/root/node", "rid": {"type": "FalconRawTopic", "data": {...}}}
  */
 public class ConnectionPointJsonDeserializer extends JsonDeserializer<ConnectionPoint> {
 

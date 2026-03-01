@@ -6,7 +6,7 @@ import javafx.scene.control.Alert;
 import javafx.scene.layout.BorderPane;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
-import me.vincentzz.falcon.ifo.FalconResourceId;
+import me.vincentzz.falcon.rid.FalconRawTopic;
 import me.vincentzz.falcon.node.AskProvider;
 import me.vincentzz.falcon.node.BidProvider;
 import me.vincentzz.falcon.node.HardcodeAttributeProvider;
@@ -17,7 +17,6 @@ import me.vincentzz.falcon.node.VwapCalculator;
 import me.vincentzz.graph.json.NodeTypeRegistry;
 import me.vincentzz.graph.node.NodeGroup;
 import me.vincentzz.visual.controller.MainController;
-import me.vincentzz.visual.util.ColorScheme;
 
 import java.io.File;
 
@@ -91,7 +90,17 @@ public class VisualCalculationApplication extends Application {
                 NodeTypeRegistry.registerNodeType("MarkToMarketCalculator", MarkToMarketCalculator.class);
 
                 // Register resource types
-                NodeTypeRegistry.registerResourceType("FalconResourceId", FalconResourceId.class);
+                NodeTypeRegistry.registerResourceType("FalconRawTopic", FalconRawTopic.class);
+
+                // Register value types (attribute classes used in FalconRawTopic.type)
+                NodeTypeRegistry.registerValueType("Ask", me.vincentzz.falcon.attribute.Ask.class);
+                NodeTypeRegistry.registerValueType("Bid", me.vincentzz.falcon.attribute.Bid.class);
+                NodeTypeRegistry.registerValueType("MidPrice", me.vincentzz.falcon.attribute.MidPrice.class);
+                NodeTypeRegistry.registerValueType("Spread", me.vincentzz.falcon.attribute.Spread.class);
+                NodeTypeRegistry.registerValueType("Volume", me.vincentzz.falcon.attribute.Volume.class);
+                NodeTypeRegistry.registerValueType("Vwap", me.vincentzz.falcon.attribute.Vwap.class);
+                NodeTypeRegistry.registerValueType("MarkToMarket", me.vincentzz.falcon.attribute.MarkToMarket.class);
+
                 mainController.loadEvaluationResult(selectedFile);
             } catch (Exception e) {
                 showErrorDialog("File Load Error", "Failed to load the selected file", e);

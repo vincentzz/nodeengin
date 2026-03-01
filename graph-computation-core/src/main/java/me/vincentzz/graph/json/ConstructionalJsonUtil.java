@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import me.vincentzz.graph.model.AdhocOverride;
+import me.vincentzz.graph.model.EvaluationBundle;
 import me.vincentzz.graph.model.EvaluationResult;
 import me.vincentzz.graph.model.ResourceIdentifier;
 import me.vincentzz.graph.node.CalculationNode;
@@ -60,6 +61,10 @@ public class ConstructionalJsonUtil {
         // EvaluationResult
         module.addSerializer(EvaluationResult.class, new EvaluationResultJsonSerializer());
         module.addDeserializer(EvaluationResult.class, new EvaluationResultJsonDeserializer());
+
+        // EvaluationBundle
+        module.addSerializer(EvaluationBundle.class, new EvaluationBundleJsonSerializer());
+        module.addDeserializer(EvaluationBundle.class, new EvaluationBundleJsonDeserializer());
 
         // Snapshot
         module.addSerializer(me.vincentzz.graph.model.Snapshot.class, new SnapshotJsonSerializer());
@@ -194,6 +199,60 @@ public class ConstructionalJsonUtil {
             return Success.of(OBJECT_MAPPER.readValue(is, EvaluationResult.class));
         } catch (Exception e) {
             return Failure.of(new RuntimeException("Failed to read EvaluationResult from path", e));
+        }
+    }
+
+    // ===== EVALUATION BUNDLE SERIALIZATION =====
+
+    public static Result<String> toJsonEvaluationBundle(EvaluationBundle bundle) {
+        try {
+            return Success.of(OBJECT_MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(bundle));
+        } catch (Exception e) {
+            return Failure.of(new RuntimeException("Failed to serialize EvaluationBundle to JSON", e));
+        }
+    }
+
+    public static Result<Void> toJsonFile(EvaluationBundle bundle, File file) {
+        try {
+            OBJECT_MAPPER.writerWithDefaultPrettyPrinter().writeValue(file, bundle);
+            return Success.of(null);
+        } catch (Exception e) {
+            return Failure.of(new RuntimeException("Failed to write EvaluationBundle to file", e));
+        }
+    }
+
+    public static Result<Void> toJsonFile(EvaluationBundle bundle, Path path) {
+        try (OutputStream os = Files.newOutputStream(path)) {
+            OBJECT_MAPPER.writerWithDefaultPrettyPrinter().writeValue(os, bundle);
+            return Success.of(null);
+        } catch (Exception e) {
+            return Failure.of(new RuntimeException("Failed to write EvaluationBundle to path", e));
+        }
+    }
+
+    // ===== EVALUATION BUNDLE DESERIALIZATION =====
+
+    public static Result<EvaluationBundle> fromJsonEvaluationBundle(String json) {
+        try {
+            return Success.of(OBJECT_MAPPER.readValue(json, EvaluationBundle.class));
+        } catch (Exception e) {
+            return Failure.of(new RuntimeException("Failed to deserialize JSON to EvaluationBundle", e));
+        }
+    }
+
+    public static Result<EvaluationBundle> fromJsonEvaluationBundleFile(File file) {
+        try {
+            return Success.of(OBJECT_MAPPER.readValue(file, EvaluationBundle.class));
+        } catch (Exception e) {
+            return Failure.of(new RuntimeException("Failed to read EvaluationBundle from file", e));
+        }
+    }
+
+    public static Result<EvaluationBundle> fromJsonEvaluationBundleFile(Path path) {
+        try (InputStream is = Files.newInputStream(path)) {
+            return Success.of(OBJECT_MAPPER.readValue(is, EvaluationBundle.class));
+        } catch (Exception e) {
+            return Failure.of(new RuntimeException("Failed to read EvaluationBundle from path", e));
         }
     }
 

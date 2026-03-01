@@ -1,9 +1,7 @@
 package me.vincentzz.graph.node;
 
 import me.vincentzz.graph.model.ResourceIdentifier;
-import me.vincentzz.graph.scope.Exclude;
-import me.vincentzz.graph.scope.Include;
-import me.vincentzz.graph.scope.Scope;
+import me.vincentzz.graph.scope.*;
 
 import java.nio.file.Path;
 import java.util.*;
@@ -153,29 +151,33 @@ public record NodeGroup(
     
     private Map<String, Object> createScopeSpec(Scope<ConnectionPoint> scope) {
         Map<String, Object> scopeSpec = new HashMap<>();
-        
+
+        String scopeType;
+        ScopeSet<ConnectionPoint> scopeSet;
         if (scope instanceof Include<ConnectionPoint> include) {
-            scopeSpec.put("type", "Include");
-            List<Map<String, Object>> valuesList = new ArrayList<>();
-            for (ConnectionPoint cp : include.resources()) {
-                Map<String, Object> valueSpec = new HashMap<>();
-                valueSpec.put("nodePath", cp.nodePath());
-                valueSpec.put("resourceIdentifier", createResourceSpec(cp.rid()));
-                valuesList.add(valueSpec);
-            }
-            scopeSpec.put("values", valuesList);
+            scopeType = "Include";
+            scopeSet = include.scopeSet();
         } else if (scope instanceof Exclude<ConnectionPoint> exclude) {
-            scopeSpec.put("type", "Exclude");
+            scopeType = "Exclude";
+            scopeSet = exclude.scopeSet();
+        } else {
+            return scopeSpec;
+        }
+
+        scopeSpec.put("type", scopeType);
+        if (scopeSet instanceof FullSet<ConnectionPoint> fullSet) {
             List<Map<String, Object>> valuesList = new ArrayList<>();
-            for (ConnectionPoint cp : exclude.resources()) {
+            for (ConnectionPoint cp : fullSet.elements()) {
                 Map<String, Object> valueSpec = new HashMap<>();
                 valueSpec.put("nodePath", cp.nodePath());
                 valueSpec.put("resourceIdentifier", createResourceSpec(cp.rid()));
                 valuesList.add(valueSpec);
             }
             scopeSpec.put("values", valuesList);
+        } else if (scopeSet instanceof RegExMatch<ConnectionPoint> regEx) {
+            scopeSpec.put("fieldMatcher", regEx.fieldMatcher());
         }
-        
+
         return scopeSpec;
     }
 }

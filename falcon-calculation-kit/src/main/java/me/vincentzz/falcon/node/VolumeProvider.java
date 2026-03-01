@@ -1,7 +1,7 @@
 package me.vincentzz.falcon.node;
 
 import me.vincentzz.falcon.attribute.Volume;
-import me.vincentzz.falcon.ifo.FalconResourceId;
+import me.vincentzz.falcon.rid.FalconRawTopic;
 import me.vincentzz.graph.model.ResourceIdentifier;
 import me.vincentzz.graph.model.Snapshot;
 import me.vincentzz.graph.node.AtomicNode;
@@ -13,11 +13,11 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
 
-public record VolumeProvider(String ifo, String source) implements AtomicNode {
-    
+public record VolumeProvider(String symbol, String source) implements AtomicNode {
+
     @Override
     public Map<String, Object> getConstructionParameters() {
-        return Map.of("ifo", ifo, "source", source);
+        return Map.of("symbol", symbol, "source", source);
     }
 
     @Override
@@ -27,7 +27,7 @@ public record VolumeProvider(String ifo, String source) implements AtomicNode {
 
     @Override
     public Set<ResourceIdentifier> outputs() {
-        return Set.of(FalconResourceId.of(ifo, source, Volume.class));
+        return Set.of(FalconRawTopic.of(symbol, source, Volume.class));
     }
 
     @Override
@@ -41,9 +41,9 @@ public record VolumeProvider(String ifo, String source) implements AtomicNode {
         BigDecimal volumeQuantity = new BigDecimal("150000"); // 150k shares
         Instant time = Instant.now();
         Volume volume = new Volume(volumeQuantity, time);
-        
+
         return Map.of(
-            FalconResourceId.of(ifo, source, Volume.class), 
+            FalconRawTopic.of(symbol, source, Volume.class),
             Success.of(volume)
         );
     }

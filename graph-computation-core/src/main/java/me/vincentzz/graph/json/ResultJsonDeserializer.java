@@ -114,7 +114,7 @@ public class ResultJsonDeserializer extends JsonDeserializer<Result<Object>> {
         } else if (fieldType == java.time.Instant.class) {
             return java.time.Instant.parse(fieldNode.asText());
         } else if (fieldType == Class.class) {
-            // Handle Class<?> fields (e.g., attribute in FalconResourceId)
+            // Handle Class<?> fields (e.g., attribute in FalconRawTopic)
             return NodeTypeRegistry.resolveClass(fieldNode.asText());
         } else {
             return fieldNode.asText();

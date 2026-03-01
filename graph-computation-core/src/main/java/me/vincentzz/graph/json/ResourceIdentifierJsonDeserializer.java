@@ -10,7 +10,7 @@ import java.io.IOException;
 
 /**
  * JSON deserializer for ResourceIdentifier.
- * Consumes: {"type": "FalconResourceId", "data": {"ifo": ..., "source": ..., "attribute": ...}}
+ * Consumes: {"type": "FalconRawTopic", "data": {"symbol": ..., "source": ..., "attribute": ...}}
  */
 public class ResourceIdentifierJsonDeserializer extends JsonDeserializer<ResourceIdentifier> {
 

@@ -15,10 +15,10 @@ import java.util.Map;
 
 /**
  * JSON serializer for EvaluationResult.
- * Produces the Evaluation Result schema with:
- * - nodeEvaluations as a JSON object (path keys → values)
+ * Produces the schema with:
+ * - request as a nested object (requestedResourceIds, snapshot, requestedNodePath, adhocOverride)
  * - results as [{"rid": {...}, "result": {...}}, ...]
- * - graph as an embedded Graph Definition
+ * - evaluations as a JSON object (path keys → values)
  */
 public class EvaluationResultJsonSerializer extends JsonSerializer<EvaluationResult> {
 
@@ -26,22 +26,35 @@ public class EvaluationResultJsonSerializer extends JsonSerializer<EvaluationRes
     public void serialize(EvaluationResult er, JsonGenerator gen, SerializerProvider serializers) throws IOException {
         gen.writeStartObject();
 
-        // snapshot
-        gen.writeFieldName("snapshot");
-        serializers.findValueSerializer(er.snapshot().getClass())
-                .serialize(er.snapshot(), gen, serializers);
+        // request
+        gen.writeObjectFieldStart("request");
+        {
+            // rids
+            gen.writeArrayFieldStart("rids");
+            for (ResourceIdentifier rid : er.request().rids()) {
+                serializers.findValueSerializer(ResourceIdentifier.class)
+                        .serialize(rid, gen, serializers);
+            }
+            gen.writeEndArray();
 
-        // requestedNodePath
-        gen.writeStringField("requestedNodePath", PathUtils.toUnixString(er.requestedNodePath()));
+            // snapshot
+            gen.writeFieldName("snapshot");
+            serializers.findValueSerializer(er.request().snapshot().getClass())
+                    .serialize(er.request().snapshot(), gen, serializers);
 
-        // adhocOverride
-        gen.writeFieldName("adhocOverride");
-        if (er.adhocOverride().isPresent()) {
-            serializers.findValueSerializer(er.adhocOverride().get().getClass())
-                    .serialize(er.adhocOverride().get(), gen, serializers);
-        } else {
-            gen.writeNull();
+            // path
+            gen.writeStringField("path", PathUtils.toUnixString(er.request().path()));
+
+            // adhocOverride
+            gen.writeFieldName("override");
+            if (er.request().override().isPresent()) {
+                serializers.findValueSerializer(er.request().override().get().getClass())
+                        .serialize(er.request().override().get(), gen, serializers);
+            } else {
+                gen.writeNull();
+            }
         }
+        gen.writeEndObject();
 
         // results — [{"rid": {...}, "result": {...}}, ...]
         gen.writeArrayFieldStart("results");
@@ -57,19 +70,14 @@ public class EvaluationResultJsonSerializer extends JsonSerializer<EvaluationRes
         }
         gen.writeEndArray();
 
-        // nodeEvaluations — JSON object with path string keys
-        gen.writeObjectFieldStart("nodeEvaluations");
-        for (Map.Entry<Path, NodeEvaluation> entry : er.nodeEvaluationMap().entrySet()) {
+        // evaluations — JSON object with path string keys
+        gen.writeObjectFieldStart("evaluations");
+        for (Map.Entry<Path, NodeEvaluation> entry : er.evaluations().entrySet()) {
             gen.writeFieldName(PathUtils.toUnixString(entry.getKey()));
             serializers.findValueSerializer(NodeEvaluation.class)
                     .serialize(entry.getValue(), gen, serializers);
         }
         gen.writeEndObject();
-
-        // graph — embedded Graph Definition
-        gen.writeFieldName("graph");
-        serializers.findValueSerializer(er.graph().getClass())
-                .serialize(er.graph(), gen, serializers);
 
         gen.writeEndObject();
     }

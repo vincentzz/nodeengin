@@ -1,7 +1,7 @@
 package me.vincentzz.falcon.demo;
 
 import me.vincentzz.falcon.attribute.*;
-import me.vincentzz.falcon.ifo.FalconResourceId;
+import me.vincentzz.falcon.rid.FalconRawTopic;
 import me.vincentzz.falcon.node.*;
 import me.vincentzz.graph.CalculationEngine;
 import me.vincentzz.graph.json.NodeTypeRegistry;
@@ -30,7 +30,13 @@ public class ComprehensiveFinancialDemo {
         NodeTypeRegistry.registerNodeType("HardcodeAttributeProvider", HardcodeAttributeProvider.class);
 
         // Register resource types
-        NodeTypeRegistry.registerResourceType("FalconResourceId", FalconResourceId.class);
+        NodeTypeRegistry.registerResourceType("FalconRawTopic", FalconRawTopic.class);
+
+        // Register value types (attribute classes used in FalconRawTopic.type)
+        NodeTypeRegistry.registerValueType("Ask", Ask.class);
+        NodeTypeRegistry.registerValueType("Bid", Bid.class);
+        NodeTypeRegistry.registerValueType("MidPrice", MidPrice.class);
+        NodeTypeRegistry.registerValueType("Spread", Spread.class);
     }
     
     public static void main(String[] args) {
@@ -42,24 +48,24 @@ public class ComprehensiveFinancialDemo {
         BidProvider googleBid = new BidProvider("GOOGLE", "Bloomberg");
         MidSpreadCalculator appleMidCalculator = new MidSpreadCalculator("APPLE", "FALCON");
         MidSpreadCalculator googleMidCalculator = new MidSpreadCalculator("GOOGLE", "FALCON");
-        HardcodeAttributeProvider hardcodedAppleAsk = new HardcodeAttributeProvider(FalconResourceId.of("APPLE", "HARDCODED", Ask.class),
+        HardcodeAttributeProvider hardcodedAppleAsk = new HardcodeAttributeProvider(FalconRawTopic.of("APPLE", "HARDCODED", Ask.class),
                 new Ask(BigDecimal.valueOf(120), BigDecimal.valueOf(1), Instant.now()));
 
         NodeGroup rawGroup = NodeGroup.of("rawGroup", Set.of(appleAsk, appleBid, googleAsk, googleBid));
         NodeGroup calGroup = NodeGroup.of("calGroup", Set.of(appleMidCalculator, googleMidCalculator));
         NodeGroup root = NodeGroup.of("root", Set.of(rawGroup, calGroup, hardcodedAppleAsk), Set.of(
 //                Flywire.of(
-//                        ConnectionPoint.of("hard", FalconResourceId.of("APPLE", "HARDCODED", Ask.class)),
-//                        ConnectionPoint.of("calGroup", FalconResourceId.of("APPLE","Bloomberg", Ask.class))
+//                        ConnectionPoint.of("hard", FalconRawTopic.of("APPLE", "HARDCODED", Ask.class)),
+//                        ConnectionPoint.of("calGroup", FalconRawTopic.of("APPLE","Bloomberg", Ask.class))
 //                )
         ), Exclude.of(Set.of()));
 
         CalculationEngine engine = new CalculationEngine(root);
-//        var a = engine.evaluate(Snapshot.ofNow(), Set.of(FalconResourceId.of("APPLE", "FALCON", MidPrice.class)),
+//        var a = engine.evaluate(Snapshot.ofNow(), Set.of(FalconRawTopic.of("APPLE", "FALCON", MidPrice.class)),
 //                Set.of(
 //                        Flywire.of(
-//                                ConnectionPoint.of(Path.of("hard"), FalconResourceId.of("APPLE", "HARDCODED", Ask.class)),
-//                                ConnectionPoint.of(Path.of("calGroup"), FalconResourceId.of("APPLE","Bloomberg", Ask.class))
+//                                ConnectionPoint.of(Path.of("hard"), FalconRawTopic.of("APPLE", "HARDCODED", Ask.class)),
+//                                ConnectionPoint.of(Path.of("calGroup"), FalconRawTopic.of("APPLE","Bloomberg", Ask.class))
 //                        )
 //                )
 //        );

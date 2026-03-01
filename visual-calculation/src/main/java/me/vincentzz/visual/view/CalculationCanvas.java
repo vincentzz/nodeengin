@@ -11,12 +11,14 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Tooltip;
 import javafx.scene.input.MouseEvent;
+import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.Pane;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 import javafx.util.Duration;
+import me.vincentzz.graph.model.EvaluationBundle;
 import me.vincentzz.graph.model.EvaluationResult;
 import me.vincentzz.graph.model.ResourceIdentifier;
 import me.vincentzz.graph.model.input.InputSourceType;
@@ -52,6 +54,11 @@ public class CalculationCanvas extends ScrollPane {
     private static final double SIDE_PANEL_WIDTH = 200;
     private static final Duration TOOLTIP_DELAY = Duration.millis(500); // 500ms delay before showing tooltip
     private static final Duration CONNECTION_POINT_TOOLTIP_DELAY = Duration.millis(100); // 100ms delay for connection points
+
+    // Zoom constants
+    private static final double ZOOM_MIN = 0.2;
+    private static final double ZOOM_MAX = 3.0;
+    private static final double ZOOM_STEP = 0.1;
     
     // Floating info panel constants
     private static final double INFO_PANEL_WIDTH = 280;
@@ -65,6 +72,7 @@ public class CalculationCanvas extends ScrollPane {
     private GraphicsContext gc;
     private Tooltip tooltip;
     private Timeline tooltipDelayTimeline;
+    private double zoomLevel = 1.0;
     
     // Data
     private List<NodeViewModel> nodes = new ArrayList<>();
@@ -99,7 +107,7 @@ public class CalculationCanvas extends ScrollPane {
     private Consumer<Path> onNodeClicked;
     private Consumer<Path> onNodeDoubleClicked;
     private BiConsumer<Path, String> onNodeHovered;
-    private Consumer<EvaluationResult> onEditCompleted;
+    private Consumer<EvaluationBundle> onEditCompleted;
     private Consumer<Set<Path>> onMultipleNodesSelected;
     private Runnable onStructuralChange; // New callback for structural changes
     
@@ -142,7 +150,8 @@ public class CalculationCanvas extends ScrollPane {
         viewportBoundsProperty().addListener((obs, oldBounds, newBounds) -> {
             updateCanvasSize();
         });
-        
+
+
         // Create tooltip
         tooltip = new Tooltip();
         tooltip.setStyle(
@@ -169,6 +178,88 @@ public class CalculationCanvas extends ScrollPane {
                 cancelFlywireCreation();
             }
         });
+        addEventFilter(ScrollEvent.SCROLL, this::handleScroll);
+    }
+
+    private void handleScroll(ScrollEvent event) {
+        double delta = event.getDeltaY();
+        if (delta == 0) return;
+
+        double oldZoom = zoomLevel;
+        double newZoom = delta > 0
+            ? Math.min(ZOOM_MAX, zoomLevel + ZOOM_STEP)
+            : Math.max(ZOOM_MIN, zoomLevel - ZOOM_STEP);
+
+        if (oldZoom == newZoom) {
+            event.consume();
+            return;
+        }
+
+        // Use lastMousePos (canvas-relative from mouse move events) for reliable anchor
+        if (lastMousePos != null) {
+            double vpW = getViewportBounds().getWidth();
+            double vpH = getViewportBounds().getHeight();
+            double oldScrollX = getHvalue() * Math.max(0, canvas.getWidth() - vpW);
+            double oldScrollY = getVvalue() * Math.max(0, canvas.getHeight() - vpH);
+
+            // Mouse viewport-relative position
+            double mouseViewportX = lastMousePos.getX() - oldScrollX;
+            double mouseViewportY = lastMousePos.getY() - oldScrollY;
+
+            // Logical point under mouse (node space)
+            double logicalX = lastMousePos.getX() / oldZoom;
+            double logicalY = lastMousePos.getY() / oldZoom;
+
+            // Apply new zoom and resize canvas
+            zoomLevel = newZoom;
+            updateCanvasSize();
+
+            // New canvas position of the same logical point
+            double newCanvasX = logicalX * newZoom;
+            double newCanvasY = logicalY * newZoom;
+
+            // Adjust scroll so the point under the mouse stays put
+            double scrollableW = Math.max(1, canvas.getWidth() - vpW);
+            double scrollableH = Math.max(1, canvas.getHeight() - vpH);
+            setHvalue(Math.max(0, Math.min(1, (newCanvasX - mouseViewportX) / scrollableW)));
+            setVvalue(Math.max(0, Math.min(1, (newCanvasY - mouseViewportY) / scrollableH)));
+        } else {
+            zoomLevel = newZoom;
+            updateCanvasSize();
+        }
+
+        render();
+        event.consume();
+    }
+
+    /**
+     * X offset of the visible viewport's left edge in canvas pixels.
+     */
+    private double viewportScrollX() {
+        double viewportWidth = getViewportBounds().getWidth();
+        return getHvalue() * Math.max(0, canvas.getWidth() - viewportWidth);
+    }
+
+    /**
+     * Y offset of the visible viewport's top edge in canvas pixels.
+     */
+    private double viewportScrollY() {
+        double viewportHeight = getViewportBounds().getHeight();
+        return getVvalue() * Math.max(0, canvas.getHeight() - viewportHeight);
+    }
+
+    /**
+     * Width of the visible viewport in canvas pixels.
+     */
+    private double viewportCanvasWidth() {
+        return getViewportBounds().getWidth();
+    }
+
+    /**
+     * Height of the visible viewport in canvas pixels.
+     */
+    private double viewportCanvasHeight() {
+        return getViewportBounds().getHeight();
     }
     
     private void handleMouseMove(MouseEvent event) {
@@ -361,25 +452,18 @@ public class CalculationCanvas extends ScrollPane {
         if (editModel == null) {
             return false;
         }
-        
-        // Get the visible viewport bounds
-        double viewportWidth = getViewportBounds().getWidth();
-        double viewportHeight = getViewportBounds().getHeight();
-        
-        // Get current scroll position
-        double scrollX = getHvalue() * Math.max(0, canvas.getWidth() - viewportWidth);
-        double scrollY = getVvalue() * Math.max(0, canvas.getHeight() - viewportHeight);
-        
+
         // Button dimensions
         double buttonWidth = 80;
         double buttonHeight = 30;
         double buttonSpacing = 10;
         double margin = 20;
-        
-        // Position buttons horizontally at top right (now 3 buttons)
-        double startX = scrollX + viewportWidth - (buttonWidth * 3 + buttonSpacing * 2) - margin;
-        double buttonY = scrollY + margin;
-        
+
+        // Fixed canvas position matching renderEditButtons
+        double fixedRightEdge = Math.max(getViewportBounds().getWidth(), MIN_CANVAS_WIDTH) - 20;
+        double startX = fixedRightEdge - (buttonWidth * 3 + buttonSpacing * 2);
+        double buttonY = margin;
+
         // Check if click is within any button area
         double groupButtonX = startX;
         double ungroupButtonX = startX + buttonWidth + buttonSpacing;
@@ -410,26 +494,21 @@ public class CalculationCanvas extends ScrollPane {
      * Handle clicks on the edit buttons.
      */
     private void handleControlPanelClick(double x, double y) {
-        // Get button positions
-        double viewportWidth = getViewportBounds().getWidth();
-        double viewportHeight = getViewportBounds().getHeight();
-        double scrollX = getHvalue() * Math.max(0, canvas.getWidth() - viewportWidth);
-        double scrollY = getVvalue() * Math.max(0, canvas.getHeight() - viewportHeight);
-        
         // Button dimensions
         double buttonWidth = 80;
         double buttonHeight = 30;
         double buttonSpacing = 10;
         double margin = 20;
-        
-        // Position buttons horizontally at top right (now 3 buttons)
-        double startX = scrollX + viewportWidth - (buttonWidth * 3 + buttonSpacing * 2) - margin;
-        double buttonY = scrollY + margin;
-        
+
+        // Fixed canvas position matching renderEditButtons
+        double fixedRightEdge = Math.max(getViewportBounds().getWidth(), MIN_CANVAS_WIDTH) - 20;
+        double startX = fixedRightEdge - (buttonWidth * 3 + buttonSpacing * 2);
+        double buttonY = margin;
+
         double groupButtonX = startX;
         double ungroupButtonX = startX + buttonWidth + buttonSpacing;
         double resetButtonX = startX + (buttonWidth + buttonSpacing) * 2;
-        
+
         // Get selection info
         List<NodeViewModel> selectedNodes = nodes.stream().filter(NodeViewModel::isSelected).collect(java.util.stream.Collectors.toList());
         int selectedCount = selectedNodes.size();
@@ -592,9 +671,8 @@ public class CalculationCanvas extends ScrollPane {
         
         // Create default export scope: empty Exclude scope (excludes nothing = exports everything)
         // This is more intuitive than Include scope as it automatically exports all nested node outputs
-        Set<me.vincentzz.graph.node.ConnectionPoint> emptyExcludeSet = new HashSet<>();
-        me.vincentzz.graph.scope.Exclude<me.vincentzz.graph.node.ConnectionPoint> excludeScope = 
-            new me.vincentzz.graph.scope.Exclude<>(emptyExcludeSet);
+        me.vincentzz.graph.scope.Exclude<me.vincentzz.graph.node.ConnectionPoint> excludeScope =
+            me.vincentzz.graph.scope.Exclude.of(Set.of());
         
         // Create the new NodeGroup
         me.vincentzz.graph.node.NodeGroup newGroup = new me.vincentzz.graph.node.NodeGroup(
@@ -867,8 +945,9 @@ public class CalculationCanvas extends ScrollPane {
         gc.setStroke(ColorScheme.CONNECTION_FLYWIRE);
         gc.setLineWidth(CONNECTION_LINE_WIDTH);
         gc.setLineDashes(6, 4);
+        // Start point is in node logical space → zoom to canvas; mouse endpoint is already canvas space
         drawCurvedConnection(
-            flywireStartPoint.getX(), flywireStartPoint.getY(),
+            flywireStartPoint.getX() * zoomLevel, flywireStartPoint.getY() * zoomLevel,
             flywireCurrentPoint.getX(), flywireCurrentPoint.getY()
         );
         gc.setLineDashes(null);
@@ -905,19 +984,21 @@ public class CalculationCanvas extends ScrollPane {
         NodeViewModel nodeAtMouse = findNodeAt(event.getX(), event.getY());
         if (nodeAtMouse != null) {
             draggedNode = nodeAtMouse;
-            dragOffset = new Point2D(event.getX() - nodeAtMouse.getX(), event.getY() - nodeAtMouse.getY());
-            isDragging = false; // Will be set to true when actual dragging starts
-            setPannable(false); // Disable scroll pane panning while dragging node
+            // Offset in canvas space: mouse canvas pos minus node zoomed pos
+            dragOffset = new Point2D(event.getX() - nodeAtMouse.getX() * zoomLevel,
+                                     event.getY() - nodeAtMouse.getY() * zoomLevel);
+            isDragging = false;
+            setPannable(false);
         }
     }
-    
+
     private void handleMouseDragged(MouseEvent event) {
         if (draggedNode != null) {
             isDragging = true;
-            
-            // Update node position
-            double newX = event.getX() - dragOffset.getX();
-            double newY = event.getY() - dragOffset.getY();
+
+            // Convert canvas position back to logical node space
+            double newX = (event.getX() - dragOffset.getX()) / zoomLevel;
+            double newY = (event.getY() - dragOffset.getY()) / zoomLevel;
             draggedNode.setX(newX);
             draggedNode.setY(newY);
             
@@ -949,8 +1030,11 @@ public class CalculationCanvas extends ScrollPane {
     }
     
     private NodeViewModel findNodeAt(double x, double y) {
+        // Convert canvas coordinates to logical node space
+        double lx = x / zoomLevel;
+        double ly = y / zoomLevel;
         for (NodeViewModel node : nodes) {
-            if (node.contains(x, y)) {
+            if (node.contains(lx, ly)) {
                 return node;
             }
         }
@@ -979,15 +1063,17 @@ public class CalculationCanvas extends ScrollPane {
      */
     private void showTooltipWithDelay(String tooltipText, double x, double y, Duration delay) {
         cancelTooltipDelay();
-        
+
         tooltipDelayTimeline = new Timeline(new KeyFrame(delay, e -> {
             tooltip.setText(tooltipText);
             Platform.runLater(() -> {
-                tooltip.show(canvas, x + canvas.localToScreen(canvas.getBoundsInLocal()).getMinX() + 10,
-                                   y + canvas.localToScreen(canvas.getBoundsInLocal()).getMinY() - 10);
+                Point2D screenPos = canvas.localToScreen(x, y);
+                if (screenPos != null) {
+                    tooltip.show(canvas, screenPos.getX() + 10, screenPos.getY() - 10);
+                }
             });
         }));
-        
+
         tooltipDelayTimeline.play();
     }
     
@@ -1441,17 +1527,17 @@ public class CalculationCanvas extends ScrollPane {
      */
     private void renderPathConnectionPoints() {
         gc.setFont(Font.font("Arial", FontWeight.BOLD, 12));
-        
+
         // Get inputs and outputs for the CURRENT PATH
         List<ResourceIdentifier> pathInputs = getPathInputs();
         List<ResourceIdentifier> pathOutputs = getPathOutputs();
-        
+
         // Remove duplicates while preserving order
         pathInputs = pathInputs.stream().distinct().toList();
         pathOutputs = pathOutputs.stream().distinct().toList();
-        
-        // Render left side inputs
-        double leftTextX = 20; // Text starts from left edge
+
+        // Render left side inputs at fixed canvas positions
+        double leftTextX = 20;
         double startY = 100;
         double ySpacing = 40;
         
@@ -1495,8 +1581,8 @@ public class CalculationCanvas extends ScrollPane {
             }
         }
         
-        // Render right side outputs  
-        double rightTextEndX = canvas.getWidth() - 20; // Text ends at right edge
+        // Render right side outputs at fixed position based on viewport width
+        double rightTextEndX = Math.max(getViewportBounds().getWidth(), MIN_CANVAS_WIDTH) - 20;
         
         gc.setFill(ColorScheme.TEXT_PRIMARY);
         gc.fillText("OUTPUTS", rightTextEndX - 50, startY - 30);
@@ -1559,10 +1645,9 @@ public class CalculationCanvas extends ScrollPane {
         // Make canvas fill the viewport at minimum
         double viewportWidth = getViewportBounds().getWidth();
         double viewportHeight = getViewportBounds().getHeight();
-        
-        // Calculate required size based on content + side panels
-        double nodeArea = calculateRequiredWidth() - SIDE_PANEL_WIDTH * 2;
-        double requiredWidth = Math.max(viewportWidth, Math.max(MIN_CANVAS_WIDTH, nodeArea + SIDE_PANEL_WIDTH * 2));
+
+        // Calculate required size accounting for zoomed node positions
+        double requiredWidth = Math.max(viewportWidth, Math.max(MIN_CANVAS_WIDTH, calculateRequiredWidth()));
         double requiredHeight = Math.max(viewportHeight, Math.max(MIN_CANVAS_HEIGHT, calculateRequiredHeight()));
         
         if (canvas.getWidth() != requiredWidth || canvas.getHeight() != requiredHeight) {
@@ -1575,46 +1660,47 @@ public class CalculationCanvas extends ScrollPane {
     private void render() {
         // Ensure canvas size is current
         updateCanvasSize();
-        
+
         // Clear canvas
         gc.setFill(ColorScheme.BACKGROUND_DARK);
         gc.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());
-        
-        // Render path-level connection points on canvas sides
+
+        // Fixed UI: path-level connection points (INPUTS/OUTPUTS on sides)
         renderPathConnectionPoints();
-        
-        // Render connections first (behind nodes)
+
+        // Connections (uses zoomed node coordinates, fixed path coordinates)
         renderConnections();
 
-        // Render flywire preview line if in creation mode
+        // Flywire preview (zoomed node start, canvas-space mouse end)
         if (isDraggingFlywire && flywireStartPoint != null && flywireCurrentPoint != null) {
             renderFlywirePreview();
         }
 
-        // Render nodes (with their own connection points)
+        // Zoomed: render nodes via GC scale transform
+        gc.save();
+        gc.scale(zoomLevel, zoomLevel);
         renderNodes();
-        
-        // Render appropriate floating panels based on mode
+        gc.restore();
+
+        // Fixed UI: floating panels
         if (editModel != null) {
-            // Edit mode: show both edit buttons (top right) and info panel (bottom right)
             renderEditButtons();
             renderFloatingInfoPanel();
         } else {
-            // View mode: show info panel only
             renderFloatingInfoPanel();
         }
     }
     
     private double calculateRequiredWidth() {
         return nodes.stream()
-                   .mapToDouble(node -> node.getX() + node.getWidth())
+                   .mapToDouble(node -> (node.getX() + node.getWidth()) * zoomLevel)
                    .max()
                    .orElse(MIN_CANVAS_WIDTH) + CANVAS_PADDING;
     }
-    
+
     private double calculateRequiredHeight() {
         return nodes.stream()
-                   .mapToDouble(node -> node.getY() + node.getHeight())
+                   .mapToDouble(node -> (node.getY() + node.getHeight()) * zoomLevel)
                    .max()
                    .orElse(MIN_CANVAS_HEIGHT) + CANVAS_PADDING;
     }
@@ -1640,14 +1726,13 @@ public class CalculationCanvas extends ScrollPane {
                 // Find child nodes that need this input
                 for (NodeViewModel childNode : nodes) {
                     if (childNode.getInputs().contains(pathInput)) {
-                        NodeViewModel.ConnectionPointPosition childInputPoint = 
+                        NodeViewModel.ConnectionPointPosition childInputPoint =
                             childNode.getInputConnectionPoint(pathInput);
                         if (childInputPoint != null) {
-                            // Find the actual connection to determine its type
                             Color connectionColor = findConnectionColor(null, pathInput, childNode.getNodePath(), pathInput);
                             renderHierarchicalConnection(
                                 pathInputPoint.getX(), pathInputPoint.getY(),
-                                childInputPoint.x(), childInputPoint.y(),
+                                childInputPoint.x() * zoomLevel, childInputPoint.y() * zoomLevel,
                                 connectionColor
                             );
                         }
@@ -1655,7 +1740,7 @@ public class CalculationCanvas extends ScrollPane {
                 }
             }
         }
-        
+
         // 2. Connect child node outputs to path outputs
         for (ResourceIdentifier pathOutput : pathOutputs) {
             Point2D pathOutputPoint = getPathOutputPoint(pathOutput);
@@ -1663,13 +1748,12 @@ public class CalculationCanvas extends ScrollPane {
                 // Find child nodes that produce this output
                 for (NodeViewModel childNode : nodes) {
                     if (childNode.getOutputs().contains(pathOutput)) {
-                        NodeViewModel.ConnectionPointPosition childOutputPoint = 
+                        NodeViewModel.ConnectionPointPosition childOutputPoint =
                             childNode.getOutputConnectionPoint(pathOutput);
                         if (childOutputPoint != null) {
-                            // Find the actual connection to determine its type
                             Color connectionColor = findConnectionColor(childNode.getNodePath(), pathOutput, null, pathOutput);
                             renderHierarchicalConnection(
-                                childOutputPoint.x(), childOutputPoint.y(),
+                                childOutputPoint.x() * zoomLevel, childOutputPoint.y() * zoomLevel,
                                 pathOutputPoint.getX(), pathOutputPoint.getY(),
                                 connectionColor
                             );
@@ -1678,13 +1762,12 @@ public class CalculationCanvas extends ScrollPane {
                 }
             }
         }
-        
-        // 3. Internal connections between child nodes
+
+        // 3. Internal connections between child nodes (both endpoints zoomed)
         for (ConnectionViewModel connection : connections) {
-            // Only draw connections between nodes that are both visible at current level
             NodeViewModel sourceNode = findNodeByPath(connection.getSourcePath());
             NodeViewModel targetNode = findNodeByPath(connection.getTargetPath());
-            
+
             if (sourceNode != null && targetNode != null) {
                 renderDirectConnection(connection, sourceNode, targetNode);
             }
@@ -1702,17 +1785,17 @@ public class CalculationCanvas extends ScrollPane {
     private void renderDirectConnection(ConnectionViewModel connection, NodeViewModel sourceNode, NodeViewModel targetNode) {
         Color lineColor = ColorScheme.getConnectionLineColor(
             mapConnectionType(connection.getConnectionType()));
-        
-        // Get actual connection points on the nodes
-        NodeViewModel.ConnectionPointPosition sourcePoint = 
+
+        // Get actual connection points on the nodes (logical coords, zoom to canvas)
+        NodeViewModel.ConnectionPointPosition sourcePoint =
             sourceNode.getOutputConnectionPoint(connection.getSourceResource());
-        NodeViewModel.ConnectionPointPosition targetPoint = 
+        NodeViewModel.ConnectionPointPosition targetPoint =
             targetNode.getInputConnectionPoint(connection.getTargetResource());
-        
+
         if (sourcePoint != null && targetPoint != null) {
             renderHierarchicalConnection(
-                sourcePoint.x(), sourcePoint.y(),
-                targetPoint.x(), targetPoint.y(),
+                sourcePoint.x() * zoomLevel, sourcePoint.y() * zoomLevel,
+                targetPoint.x() * zoomLevel, targetPoint.y() * zoomLevel,
                 lineColor
             );
         }
@@ -1767,8 +1850,8 @@ public class CalculationCanvas extends ScrollPane {
         
         // Check if this is a flywire connection from adhoc overrides first
         if (sourcePath != null && sourceResource != null && targetPath != null && targetResource != null && model != null) {
-            if (model.getEvaluationResult().adhocOverride().isPresent()) {
-                var flywires = model.getEvaluationResult().adhocOverride().get().adhocFlywires();
+            if (model.getEvaluationResult().request().override().isPresent()) {
+                var flywires = model.getEvaluationResult().request().override().get().adhocFlywires();
                 for (var flywire : flywires) {
                     if (flywire.source().nodePath().equals(sourcePath) && 
                         flywire.source().rid().equals(sourceResource) &&
@@ -1782,7 +1865,7 @@ public class CalculationCanvas extends ScrollPane {
         
         // Use InputResult context to determine connection type for target node - this is the primary method
         if (model != null && targetPath != null && targetResource != null) {
-            var nodeEvaluation = model.getEvaluationResult().nodeEvaluationMap().get(targetPath);
+            var nodeEvaluation = model.getEvaluationResult().evaluations().get(targetPath);
             if (nodeEvaluation != null && nodeEvaluation.inputs().containsKey(targetResource)) {
                 var inputResult = nodeEvaluation.inputs().get(targetResource);
                 var inputContext = inputResult.inputContext();
@@ -1854,7 +1937,7 @@ public class CalculationCanvas extends ScrollPane {
         
         // Final fallback: check for any matching resource across all nodes
         if (model != null && targetResource != null) {
-            for (var entry : model.getEvaluationResult().nodeEvaluationMap().entrySet()) {
+            for (var entry : model.getEvaluationResult().evaluations().entrySet()) {
                 Path nodePath = entry.getKey();
                 me.vincentzz.graph.model.NodeEvaluation nodeEvaluation = entry.getValue();
                 
@@ -2040,7 +2123,7 @@ public class CalculationCanvas extends ScrollPane {
         }
 
         try {
-            var nodeEvaluation = model.getEvaluationResult().nodeEvaluationMap().get(node.getNodePath());
+            var nodeEvaluation = model.getEvaluationResult().evaluations().get(node.getNodePath());
             if (nodeEvaluation == null) {
                 return false; // No evaluation data means not evaluated
             }
@@ -2062,7 +2145,7 @@ public class CalculationCanvas extends ScrollPane {
                 // Search child node evaluations for this resource.
                 if (node.isNodeGroup()) {
                     String nodePathStr = PathUtils.toUnixString(node.getNodePath());
-                    for (var entry : model.getEvaluationResult().nodeEvaluationMap().entrySet()) {
+                    for (var entry : model.getEvaluationResult().evaluations().entrySet()) {
                         String candidateStr = PathUtils.toUnixString(entry.getKey());
                         if (candidateStr.startsWith(nodePathStr + "/")) {
                             var childOutput = entry.getValue().outputs().get(resource);
@@ -2153,7 +2236,7 @@ public class CalculationCanvas extends ScrollPane {
             }
             
             // Secondary check: current path's node evaluation
-            var nodeEvaluation = model.getEvaluationResult().nodeEvaluationMap().get(currentPath);
+            var nodeEvaluation = model.getEvaluationResult().evaluations().get(currentPath);
             if (nodeEvaluation != null) {
                 if (isInput) {
                     // For path input connection points, check if the input result is successful
@@ -2173,7 +2256,7 @@ public class CalculationCanvas extends ScrollPane {
             }
             
             // Tertiary check: look through all node evaluations to find this resource
-            for (var entry : model.getEvaluationResult().nodeEvaluationMap().entrySet()) {
+            for (var entry : model.getEvaluationResult().evaluations().entrySet()) {
                 var pathKey = entry.getKey();
                 var evaluation = entry.getValue();
                 
@@ -2197,7 +2280,7 @@ public class CalculationCanvas extends ScrollPane {
     private String getShortResourceName(ResourceIdentifier resourceId) {
         String fullName = getResourceName(resourceId);
         
-        // Handle FalconResourceId format: FalconResourceId[ifo=GOOGLE, source=FALCON, attribute=class me.vincentzz.falcon.attribute.Spread]
+        // Handle FalconRawTopic format: FalconRawTopic[symbol=GOOGLE, source=FALCON, attribute=Spread]
         if (fullName.contains("attribute=")) {
             int attributeStart = fullName.indexOf("attribute=") + "attribute=".length();
             int attributeEnd = fullName.indexOf("]", attributeStart);
@@ -2255,7 +2338,7 @@ public class CalculationCanvas extends ScrollPane {
         
         try {
             String currentPathStr = PathUtils.toUnixString(currentPath);
-            var graph = model.getEvaluationResult().graph();
+            var graph = model.getGraph();
 
             // Extract actual inputs by calling inputs() on CalculationNode objects
             var inputs = extractInputsFromCalculationNode(graph, currentPathStr);
@@ -2294,7 +2377,7 @@ public class CalculationCanvas extends ScrollPane {
         
         try {
             String currentPathStr = PathUtils.toUnixString(currentPath);
-            var graph = model.getEvaluationResult().graph();
+            var graph = model.getGraph();
 
             // Extract actual outputs by calling outputs() on CalculationNode objects
             var outputs = extractOutputsFromCalculationNode(graph, currentPathStr);
@@ -2404,7 +2487,7 @@ public class CalculationCanvas extends ScrollPane {
     private Point2D getPathInputPoint(ResourceIdentifier input) {
         List<ResourceIdentifier> pathInputs = getPathInputs();
         int index = pathInputs.indexOf(input);
-        
+
         if (index >= 0) {
             double leftTextX = 20;
             double startY = 100;
@@ -2436,9 +2519,9 @@ public class CalculationCanvas extends ScrollPane {
     private Point2D getPathOutputPoint(ResourceIdentifier output) {
         List<ResourceIdentifier> pathOutputs = getPathOutputs();
         int index = pathOutputs.indexOf(output);
-        
+
         if (index >= 0) {
-            double rightTextEndX = canvas.getWidth() - 20;
+            double rightTextEndX = Math.max(getViewportBounds().getWidth(), MIN_CANVAS_WIDTH) - 20;
             double startY = 100;
             double ySpacing = 40;
             double y = startY + index * ySpacing;
@@ -2475,7 +2558,7 @@ public class CalculationCanvas extends ScrollPane {
         this.onNodeHovered = onNodeHovered;
     }
     
-    public void setOnEditCompleted(Consumer<EvaluationResult> onEditCompleted) {
+    public void setOnEditCompleted(Consumer<EvaluationBundle> onEditCompleted) {
         this.onEditCompleted = onEditCompleted;
     }
     
@@ -2620,7 +2703,7 @@ public class CalculationCanvas extends ScrollPane {
                 }
                 
                 // Check output label area with more generous bounds
-                double rightTextEndX = canvas.getWidth() - 20;
+                double rightTextEndX = Math.max(getViewportBounds().getWidth(), MIN_CANVAS_WIDTH) - 20;
                 double startY = 100;
                 double ySpacing = 40;
                 int index = pathOutputs.indexOf(output);
@@ -2666,7 +2749,7 @@ public class CalculationCanvas extends ScrollPane {
         tooltipText.append("ResourceId : ").append(resourceId.toString()).append("\n");
         
         if (model != null && currentPath != null) {
-            var nodeEvaluation = model.getEvaluationResult().nodeEvaluationMap().get(currentPath);
+            var nodeEvaluation = model.getEvaluationResult().evaluations().get(currentPath);
             
             if (isInput) {
                 // For path inputs, show the same detailed information as node inputs
@@ -2716,7 +2799,7 @@ public class CalculationCanvas extends ScrollPane {
                 } else {
                     // Check if this output is available from child nodes
                     boolean foundInChild = false;
-                    for (var entry : model.getEvaluationResult().nodeEvaluationMap().entrySet()) {
+                    for (var entry : model.getEvaluationResult().evaluations().entrySet()) {
                         var evaluation = entry.getValue();
                         if (evaluation.outputs().containsKey(resourceId)) {
                             var outputResult = evaluation.outputs().get(resourceId);
@@ -2762,7 +2845,7 @@ public class CalculationCanvas extends ScrollPane {
         tooltipText.append("ResourceId : ").append(resourceId.toString()).append("\n");
         
         if (model != null && currentPath != null) {
-            var nodeEvaluation = model.getEvaluationResult().nodeEvaluationMap().get(currentPath);
+            var nodeEvaluation = model.getEvaluationResult().evaluations().get(currentPath);
             
             if (isInput) {
                 // For path inputs, show the same detailed information as node inputs
@@ -2812,7 +2895,7 @@ public class CalculationCanvas extends ScrollPane {
                 } else {
                     // Check if this output is available from child nodes
                     boolean foundInChild = false;
-                    for (var entry : model.getEvaluationResult().nodeEvaluationMap().entrySet()) {
+                    for (var entry : model.getEvaluationResult().evaluations().entrySet()) {
                         var evaluation = entry.getValue();
                         if (evaluation.outputs().containsKey(resourceId)) {
                             var outputResult = evaluation.outputs().get(resourceId);
@@ -2846,7 +2929,7 @@ public class CalculationCanvas extends ScrollPane {
     }
     
     /**
-     * Extract value from FalconResourceId string format.
+     * Extract value from FalconRawTopic string format.
      */
     private String extractValue(String resourceString, String key) {
         int keyStart = resourceString.indexOf(key);
@@ -2876,7 +2959,7 @@ public class CalculationCanvas extends ScrollPane {
         
         // Get detailed input information from nodeEvaluationMap for current path
         if (currentPath != null) {
-            var nodeEvaluation = model.getEvaluationResult().nodeEvaluationMap().get(currentPath);
+            var nodeEvaluation = model.getEvaluationResult().evaluations().get(currentPath);
             if (nodeEvaluation != null && nodeEvaluation.inputs().containsKey(resourceId)) {
                 var inputResult = nodeEvaluation.inputs().get(resourceId);
                 
@@ -2924,7 +3007,7 @@ public class CalculationCanvas extends ScrollPane {
         tooltipText.append("ResourceId : ").append(resource.toString()).append("\n");
         
         if (model != null && nodePath != null) {
-            var nodeEvaluation = model.getEvaluationResult().nodeEvaluationMap().get(nodePath);
+            var nodeEvaluation = model.getEvaluationResult().evaluations().get(nodePath);
             
             if (isInput) {
                 // For inputs, show the same detailed information
@@ -2974,7 +3057,7 @@ public class CalculationCanvas extends ScrollPane {
                 } else {
                     // Check if this output is available from child nodes
                     boolean foundInChild = false;
-                    for (var entry : model.getEvaluationResult().nodeEvaluationMap().entrySet()) {
+                    for (var entry : model.getEvaluationResult().evaluations().entrySet()) {
                         var evaluation = entry.getValue();
                         if (evaluation.outputs().containsKey(resource)) {
                             var outputResult = evaluation.outputs().get(resource);
@@ -3020,13 +3103,16 @@ public class CalculationCanvas extends ScrollPane {
      * Find node connection point at given coordinates.
      */
     private NodeConnectionPointInfo findNodeConnectionPointAt(double x, double y) {
+        // Convert canvas coordinates to logical node space
+        double lx = x / zoomLevel;
+        double ly = y / zoomLevel;
         for (NodeViewModel node : nodes) {
             // Check input connection points (both dot and label)
             for (ResourceIdentifier input : node.getInputs()) {
                 NodeViewModel.ConnectionPointPosition pos = node.getInputConnectionPoint(input);
                 if (pos != null) {
-                    // Check connection point dot
-                    double distance = Math.sqrt(Math.pow(x - pos.x(), 2) + Math.pow(y - pos.y(), 2));
+                    // Check connection point dot (in logical space)
+                    double distance = Math.sqrt(Math.pow(lx - pos.x(), 2) + Math.pow(ly - pos.y(), 2));
                     if (distance <= CONNECTION_POINT_RADIUS + 5) { // 5px tolerance
                         return new NodeConnectionPointInfo(node, input, true);
                     }
@@ -3037,47 +3123,43 @@ public class CalculationCanvas extends ScrollPane {
                     labelText.setFont(Font.font("Arial", 10));
                     double labelWidth = labelText.getBoundsInLocal().getWidth();
                     double labelHeight = labelText.getBoundsInLocal().getHeight();
-                    
+
                     double labelX = pos.x() + 15;
                     double labelY = pos.y() + 4;
-                    
-                    // Check if mouse is within label bounds
-                    if (x >= labelX && x <= labelX + labelWidth && 
-                        y >= labelY - labelHeight && y <= labelY + 4) {
+
+                    if (lx >= labelX && lx <= labelX + labelWidth &&
+                        ly >= labelY - labelHeight && ly <= labelY + 4) {
                         return new NodeConnectionPointInfo(node, input, true);
                     }
                 }
             }
-            
+
             // Check output connection points (both dot and label)
             for (ResourceIdentifier output : node.getOutputs()) {
                 NodeViewModel.ConnectionPointPosition pos = node.getOutputConnectionPoint(output);
                 if (pos != null) {
-                    // Check connection point dot
-                    double distance = Math.sqrt(Math.pow(x - pos.x(), 2) + Math.pow(y - pos.y(), 2));
-                    if (distance <= CONNECTION_POINT_RADIUS + 5) { // 5px tolerance
+                    double distance = Math.sqrt(Math.pow(lx - pos.x(), 2) + Math.pow(ly - pos.y(), 2));
+                    if (distance <= CONNECTION_POINT_RADIUS + 5) {
                         return new NodeConnectionPointInfo(node, output, false);
                     }
-                    
-                    // Check output label area (text is at pos.x() - labelWidth - 15, pos.y() + 4)
+
                     String label = getShortResourceName(output);
                     Text labelText = new Text(label);
                     labelText.setFont(Font.font("Arial", 10));
                     double labelWidth = labelText.getBoundsInLocal().getWidth();
                     double labelHeight = labelText.getBoundsInLocal().getHeight();
-                    
+
                     double labelX = pos.x() - labelWidth - 15;
                     double labelY = pos.y() + 4;
-                    
-                    // Check if mouse is within label bounds
-                    if (x >= labelX && x <= labelX + labelWidth && 
-                        y >= labelY - labelHeight && y <= labelY + 4) {
+
+                    if (lx >= labelX && lx <= labelX + labelWidth &&
+                        ly >= labelY - labelHeight && ly <= labelY + 4) {
                         return new NodeConnectionPointInfo(node, output, false);
                     }
                 }
             }
         }
-        
+
         return null;
     }
     
@@ -3091,7 +3173,7 @@ public class CalculationCanvas extends ScrollPane {
         }
         
         // Get detailed input information from nodeEvaluationMap
-        var nodeEvaluation = model.getEvaluationResult().nodeEvaluationMap().get(node.getNodePath());
+        var nodeEvaluation = model.getEvaluationResult().evaluations().get(node.getNodePath());
         if (nodeEvaluation != null && nodeEvaluation.inputs().containsKey(resource)) {
             var inputResult = nodeEvaluation.inputs().get(resource);
             
@@ -3131,11 +3213,11 @@ public class CalculationCanvas extends ScrollPane {
      * Get adhoc output value for a resource.
      */
     private String getAdhocOutputValue(ResourceIdentifier resource) {
-        if (model == null || model.getEvaluationResult().adhocOverride().isEmpty()) {
+        if (model == null || model.getEvaluationResult().request().override().isEmpty()) {
             return null;
         }
         
-        var adhocOverride = model.getEvaluationResult().adhocOverride().get();
+        var adhocOverride = model.getEvaluationResult().request().override().get();
         for (var entry : adhocOverride.adhocOutputs().entrySet()) {
             if (entry.getKey().rid().equals(resource)) {
                 return formatResultValue(entry.getValue());
@@ -3154,7 +3236,7 @@ public class CalculationCanvas extends ScrollPane {
         }
         
         // In the new API, we need to use nodeEvaluationMap to access input data
-        var nodeEvaluation = model.getEvaluationResult().nodeEvaluationMap().get(nodePath);
+        var nodeEvaluation = model.getEvaluationResult().evaluations().get(nodePath);
         if (nodeEvaluation != null && nodeEvaluation.inputs().containsKey(resource)) {
             return formatResultValue(nodeEvaluation.inputs().get(resource).value());
         }
@@ -3172,7 +3254,7 @@ public class CalculationCanvas extends ScrollPane {
         
         // In the new API, we only have nodeEvaluationMap - the distinction between direct and conditional 
         // is handled internally. Check if this resource is available as an input.
-        var nodeEvaluation = model.getEvaluationResult().nodeEvaluationMap().get(nodePath);
+        var nodeEvaluation = model.getEvaluationResult().evaluations().get(nodePath);
         if (nodeEvaluation != null && nodeEvaluation.inputs().containsKey(resource)) {
             return formatResultValue(nodeEvaluation.inputs().get(resource).value());
         }
@@ -3189,7 +3271,7 @@ public class CalculationCanvas extends ScrollPane {
         }
         
         // Look through all node evaluations to find one that produces this resource
-        for (var entry : model.getEvaluationResult().nodeEvaluationMap().entrySet()) {
+        for (var entry : model.getEvaluationResult().evaluations().entrySet()) {
             Path nodePath = entry.getKey();
             var nodeEvaluation = entry.getValue();
             
@@ -3307,7 +3389,7 @@ public class CalculationCanvas extends ScrollPane {
         }
         
         // Look through all node evaluations to find one that produces this resource
-        for (var entry : model.getEvaluationResult().nodeEvaluationMap().entrySet()) {
+        for (var entry : model.getEvaluationResult().evaluations().entrySet()) {
             Path nodePath = entry.getKey();
             var nodeEvaluation = entry.getValue();
             
@@ -3340,31 +3422,24 @@ public class CalculationCanvas extends ScrollPane {
         if (editModel == null) {
             return;
         }
-        
-        // Get the visible viewport bounds
-        double viewportWidth = getViewportBounds().getWidth();
-        double viewportHeight = getViewportBounds().getHeight();
-        
-        // Get current scroll position
-        double scrollX = getHvalue() * Math.max(0, canvas.getWidth() - viewportWidth);
-        double scrollY = getVvalue() * Math.max(0, canvas.getHeight() - viewportHeight);
-        
+
         // Button dimensions
         double buttonWidth = 80;
         double buttonHeight = 30;
         double buttonSpacing = 10;
         double margin = 20;
-        
+
         // Get selection info
         List<NodeViewModel> selectedNodes = nodes.stream().filter(NodeViewModel::isSelected).collect(java.util.stream.Collectors.toList());
         int selectedCount = selectedNodes.size();
         boolean canGroup = selectedCount >= 1;
         boolean canUngroup = selectedCount == 1 && selectedNodes.get(0).isNodeGroup();
-        
-        // Position buttons horizontally at top right (now 3 buttons)
-        double startX = scrollX + viewportWidth - (buttonWidth * 3 + buttonSpacing * 2) - margin;
-        double buttonY = scrollY + margin;
-        
+
+        // Position buttons at fixed canvas position (top right, matching OUTPUTS X anchor)
+        double fixedRightEdge = Math.max(getViewportBounds().getWidth(), MIN_CANVAS_WIDTH) - 20;
+        double startX = fixedRightEdge - (buttonWidth * 3 + buttonSpacing * 2);
+        double buttonY = margin;
+
         // Draw Group button
         double groupButtonX = startX;
         Color groupBgColor = canGroup ? ColorScheme.NODE_BACKGROUND : ColorScheme.BACKGROUND_MEDIUM;
@@ -3455,22 +3530,13 @@ public class CalculationCanvas extends ScrollPane {
         
         double panelHeight = Math.min(totalLines * INFO_PANEL_LINE_HEIGHT + INFO_PANEL_PADDING * 2, INFO_PANEL_MAX_HEIGHT);
         
-        // Position panel in bottom right corner of the visible viewport, not the full canvas
-        // Get the visible viewport bounds
-        double viewportWidth = getViewportBounds().getWidth();
-        double viewportHeight = getViewportBounds().getHeight();
-        
-        // Get current scroll position
-        double scrollX = getHvalue() * Math.max(0, canvas.getWidth() - viewportWidth);
-        double scrollY = getVvalue() * Math.max(0, canvas.getHeight() - viewportHeight);
-        
-        // Position panel in the bottom right of the visible area
-        double panelX = scrollX + viewportWidth - panelWidth - INFO_PANEL_MARGIN;
-        double panelY = scrollY + viewportHeight - panelHeight - INFO_PANEL_MARGIN;
-        
-        // Ensure panel doesn't go outside canvas bounds
-        panelX = Math.max(INFO_PANEL_MARGIN, Math.min(panelX, canvas.getWidth() - panelWidth - INFO_PANEL_MARGIN));
-        panelY = Math.max(INFO_PANEL_MARGIN, Math.min(panelY, canvas.getHeight() - panelHeight - INFO_PANEL_MARGIN));
+        // Position panel at fixed canvas position (top right area, below OUTPUTS label)
+        double fixedRightEdge = Math.max(getViewportBounds().getWidth(), MIN_CANVAS_WIDTH);
+        double panelX = fixedRightEdge - panelWidth - INFO_PANEL_MARGIN;
+        // Place below the OUTPUTS section: OUTPUTS starts at startY=100, with ySpacing=40 per item
+        List<ResourceIdentifier> pathOutputs = getPathOutputs().stream().distinct().toList();
+        double outputsSectionBottom = 100 + pathOutputs.size() * 40 + 20;
+        double panelY = Math.max(outputsSectionBottom, 100);
         
         // Draw panel background
         gc.setFill(ColorScheme.BACKGROUND_MEDIUM.deriveColor(0, 0, 0, 0.9)); // Semi-transparent
@@ -3535,7 +3601,7 @@ public class CalculationCanvas extends ScrollPane {
         
         try {
             String currentPathStr = PathUtils.toUnixString(currentPath);
-            var graph = model.getEvaluationResult().graph();
+            var graph = model.getGraph();
 
             // Extract actual flywire information by calling flywires() on NodeGroup objects
             var flywires = extractFlywireFromNodeGroup(graph, currentPathStr);
@@ -3637,7 +3703,7 @@ public class CalculationCanvas extends ScrollPane {
         
         try {
             String currentPathStr = PathUtils.toUnixString(currentPath);
-            var graph = model.getEvaluationResult().graph();
+            var graph = model.getGraph();
 
             // Extract actual scope information by calling exports() on NodeGroup objects
             var scope = extractScopeFromNodeGroup(graph, currentPathStr);
@@ -3647,55 +3713,59 @@ public class CalculationCanvas extends ScrollPane {
                 if (scope instanceof me.vincentzz.graph.scope.Include) {
                     @SuppressWarnings("unchecked")
                     var includeScope = (me.vincentzz.graph.scope.Include<me.vincentzz.graph.node.ConnectionPoint>) scope;
-                    var resources = includeScope.resources();
-                    
+                    var scopeSet = includeScope.scopeSet();
+
                     scopeInfo.add("Type: Include");
-                    if (!resources.isEmpty()) {
-                        scopeInfo.add("Resources: " + resources.size() + " included");
-                        
-                        // Show first few scope entries
-                        int displayCount = Math.min(resources.size(), 4);
-                        int count = 0;
-                        for (var connectionPoint : resources) {
-                            if (count >= displayCount) break;
-                            String resourceInfo = formatConnectionPointInfo(connectionPoint);
-                            scopeInfo.add("  " + resourceInfo);
-                            count++;
-                        }
-                        
-                        if (resources.size() > displayCount) {
-                            scopeInfo.add("  ... and " + (resources.size() - displayCount) + " more");
+                    if (scopeSet instanceof me.vincentzz.graph.scope.FullSet<me.vincentzz.graph.node.ConnectionPoint> fullSet) {
+                        var resources = fullSet.elements();
+                        if (!resources.isEmpty()) {
+                            scopeInfo.add("Resources: " + resources.size() + " included");
+                            int displayCount = Math.min(resources.size(), 4);
+                            int count = 0;
+                            for (var connectionPoint : resources) {
+                                if (count >= displayCount) break;
+                                String resourceInfo = formatConnectionPointInfo(connectionPoint);
+                                scopeInfo.add("  " + resourceInfo);
+                                count++;
+                            }
+                            if (resources.size() > displayCount) {
+                                scopeInfo.add("  ... and " + (resources.size() - displayCount) + " more");
+                            }
+                        } else {
+                            scopeInfo.add("Resources: Empty include scope");
+                            scopeInfo.add("  (No outputs exported)");
                         }
                     } else {
-                        scopeInfo.add("Resources: Empty include scope");
-                        scopeInfo.add("  (No outputs exported)");
+                        scopeInfo.add("Resources: Regex-based scope");
                     }
-                    
+
                 } else if (scope instanceof me.vincentzz.graph.scope.Exclude) {
                     @SuppressWarnings("unchecked")
                     var excludeScope = (me.vincentzz.graph.scope.Exclude<me.vincentzz.graph.node.ConnectionPoint>) scope;
-                    var resources = excludeScope.resources();
-                    
+                    var scopeSet = excludeScope.scopeSet();
+
                     scopeInfo.add("Type: Exclude");
-                    if (!resources.isEmpty()) {
-                        scopeInfo.add("Resources: " + resources.size() + " excluded");
-                        
-                        // Show first few scope entries
-                        int displayCount = Math.min(resources.size(), 4);
-                        int count = 0;
-                        for (var connectionPoint : resources) {
-                            if (count >= displayCount) break;
-                            String resourceInfo = formatConnectionPointInfo(connectionPoint);
-                            scopeInfo.add("  " + resourceInfo);
-                            count++;
-                        }
-                        
-                        if (resources.size() > displayCount) {
-                            scopeInfo.add("  ... and " + (resources.size() - displayCount) + " more");
+                    if (scopeSet instanceof me.vincentzz.graph.scope.FullSet<me.vincentzz.graph.node.ConnectionPoint> fullSet) {
+                        var resources = fullSet.elements();
+                        if (!resources.isEmpty()) {
+                            scopeInfo.add("Resources: " + resources.size() + " excluded");
+                            int displayCount = Math.min(resources.size(), 4);
+                            int count = 0;
+                            for (var connectionPoint : resources) {
+                                if (count >= displayCount) break;
+                                String resourceInfo = formatConnectionPointInfo(connectionPoint);
+                                scopeInfo.add("  " + resourceInfo);
+                                count++;
+                            }
+                            if (resources.size() > displayCount) {
+                                scopeInfo.add("  ... and " + (resources.size() - displayCount) + " more");
+                            }
+                        } else {
+                            scopeInfo.add("Resources: Empty exclude scope");
+                            scopeInfo.add("  (All outputs exported)");
                         }
                     } else {
-                        scopeInfo.add("Resources: Empty exclude scope");
-                        scopeInfo.add("  (All outputs exported)");
+                        scopeInfo.add("Resources: Regex-based scope");
                     }
                 }
             } else {
@@ -3740,7 +3810,7 @@ public class CalculationCanvas extends ScrollPane {
         
         // Check if current path has evaluation results for this resource
         if (currentPath != null) {
-            var nodeEvaluationMap = model.getEvaluationResult().nodeEvaluationMap();
+            var nodeEvaluationMap = model.getEvaluationResult().evaluations();
             var currentPathEvaluation = nodeEvaluationMap.get(currentPath);
             if (currentPathEvaluation != null && currentPathEvaluation.outputs().containsKey(resourceId)) {
                 var outputResult = currentPathEvaluation.outputs().get(resourceId);
@@ -3828,7 +3898,7 @@ public class CalculationCanvas extends ScrollPane {
                     java.nio.file.Path pathAsPath = java.nio.file.Paths.get(targetPath);
                     
                     // Add ALL inputs from nodeEvaluationMap (using new API)
-                    var nodeEvaluation = model.getEvaluationResult().nodeEvaluationMap().get(pathAsPath);
+                    var nodeEvaluation = model.getEvaluationResult().evaluations().get(pathAsPath);
                     if (nodeEvaluation != null && nodeEvaluation.inputs() != null) {
                         allInputs.addAll(nodeEvaluation.inputs().keySet());
                     }
@@ -3978,14 +4048,14 @@ public class CalculationCanvas extends ScrollPane {
     private String formatResourceDetails(ResourceIdentifier resourceId) {
         String resourceString = resourceId.toString();
         
-        // Handle FalconResourceId format comprehensively
-        if (resourceString.contains("FalconResourceId[")) {
+        // Handle FalconRawTopic format comprehensively
+        if (resourceString.contains("FalconRawTopic[")) {
             StringBuilder details = new StringBuilder();
             
-            // Extract IFO
-            String ifo = extractValue(resourceString, "ifo=");
-            if (ifo != null) {
-                details.append("IFO=").append(ifo);
+            // Extract Symbol
+            String symbol = extractValue(resourceString, "symbol=");
+            if (symbol != null) {
+                details.append("Symbol=").append(symbol);
             }
             
             // Extract Source

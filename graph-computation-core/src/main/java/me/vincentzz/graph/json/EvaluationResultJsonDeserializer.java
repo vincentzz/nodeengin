@@ -5,22 +5,19 @@ import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.JsonNode;
 import me.vincentzz.graph.model.*;
-import me.vincentzz.graph.node.CalculationNode;
 import me.vincentzz.lang.Result.Result;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 /**
  * JSON deserializer for EvaluationResult.
- * Consumes the new format with:
- * - nodeEvaluations as a JSON object (path keys → values)
+ * Consumes the format with:
+ * - request as a nested object (requestedResourceIds, snapshot, requestedNodePath, adhocOverride)
  * - results as [{"rid": {...}, "result": {...}}, ...]
- * - graph as an embedded Graph Definition
+ * - evaluations as a JSON object (path keys → values)
  */
 public class EvaluationResultJsonDeserializer extends JsonDeserializer<EvaluationResult> {
 
@@ -28,20 +25,34 @@ public class EvaluationResultJsonDeserializer extends JsonDeserializer<Evaluatio
     public EvaluationResult deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
         JsonNode node = p.getCodec().readTree(p);
 
-        // snapshot
-        Snapshot snapshot = deserializeSnapshot(node.get("snapshot"), p, ctxt);
+        // request
+        JsonNode requestNode = node.get("request");
 
-        // requestedNodePath
-        Path requestedNodePath = Paths.get(node.get("requestedNodePath").asText());
+        // rids
+        Set<ResourceIdentifier> requestedResourceIds = new LinkedHashSet<>();
+        JsonNode ridsArray = requestNode.get("rids");
+        if (ridsArray != null && ridsArray.isArray()) {
+            for (JsonNode ridNode : ridsArray) {
+                requestedResourceIds.add(ResourceIdentifierJsonDeserializer.deserializeFromNode(ridNode));
+            }
+        }
+
+        // snapshot
+        Snapshot snapshot = deserializeSnapshot(requestNode.get("snapshot"), p, ctxt);
+
+        // path
+        Path requestedNodePath = Paths.get(requestNode.get("path").asText());
 
         // adhocOverride
         Optional<AdhocOverride> adhocOverride = Optional.empty();
-        JsonNode adhocNode = node.get("adhocOverride");
+        JsonNode adhocNode = requestNode.get("override");
         if (adhocNode != null && !adhocNode.isNull()) {
             JsonParser adhocParser = adhocNode.traverse(p.getCodec());
             adhocParser.nextToken();
             adhocOverride = Optional.of(ctxt.readValue(adhocParser, AdhocOverride.class));
         }
+
+        EvaluationRequest request = new EvaluationRequest(Set.copyOf(requestedResourceIds), snapshot, requestedNodePath, adhocOverride);
 
         // results — [{"rid": {...}, "result": {...}}, ...]
         Map<ResourceIdentifier, Result<Object>> results = new HashMap<>();
@@ -54,24 +65,18 @@ public class EvaluationResultJsonDeserializer extends JsonDeserializer<Evaluatio
             }
         }
 
-        // nodeEvaluations — JSON object with path string keys
-        Map<Path, NodeEvaluation> nodeEvaluationMap = new HashMap<>();
-        JsonNode nodeEvalsNode = node.get("nodeEvaluations");
-        if (nodeEvalsNode != null && nodeEvalsNode.isObject()) {
-            nodeEvalsNode.fields().forEachRemaining(entry -> {
+        // evaluations — JSON object with path string keys
+        Map<Path, NodeEvaluation> evaluations = new HashMap<>();
+        JsonNode evalsNode = node.get("evaluations");
+        if (evalsNode != null && evalsNode.isObject()) {
+            evalsNode.fields().forEachRemaining(entry -> {
                 Path path = Paths.get(entry.getKey());
                 NodeEvaluation eval = NodeEvaluationJsonDeserializer.deserializeFromNode(entry.getValue());
-                nodeEvaluationMap.put(path, eval);
+                evaluations.put(path, eval);
             });
         }
 
-        // graph
-        JsonNode graphNode = node.get("graph");
-        JsonParser graphParser = graphNode.traverse(p.getCodec());
-        graphParser.nextToken();
-        CalculationNode graph = ctxt.readValue(graphParser, CalculationNode.class);
-
-        return new EvaluationResult(snapshot, requestedNodePath, adhocOverride, results, nodeEvaluationMap, graph);
+        return new EvaluationResult(request, results, evaluations);
     }
 
     private Snapshot deserializeSnapshot(JsonNode snapshotNode, JsonParser p, DeserializationContext ctxt) throws IOException {

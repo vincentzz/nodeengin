@@ -3,7 +3,7 @@ package me.vincentzz.visual.util;
 import javafx.scene.paint.Color;
 import me.vincentzz.graph.model.EvaluationResult;
 import me.vincentzz.graph.model.ResourceIdentifier;
-import me.vincentzz.falcon.ifo.FalconResourceId;
+import me.vincentzz.falcon.rid.FalconRawTopic;
 import me.vincentzz.lang.Result.Result;
 
 import java.util.*;
@@ -59,17 +59,17 @@ public class DynamicColorManager {
         Set<Class<?>> attributeTypes = new HashSet<>();
         
         // Extract from nodeEvaluationMap (inputs and outputs)
-        for (me.vincentzz.graph.model.NodeEvaluation nodeEvaluation : evaluationResult.nodeEvaluationMap().values()) {
+        for (me.vincentzz.graph.model.NodeEvaluation nodeEvaluation : evaluationResult.evaluations().values()) {
             // Extract from inputs
             for (ResourceIdentifier resourceId : nodeEvaluation.inputs().keySet()) {
-                if (resourceId instanceof FalconResourceId falconId) {
+                if (resourceId instanceof FalconRawTopic falconId) {
                     attributeTypes.add(falconId.attribute());
                 }
             }
             
             // Extract from outputs
             for (ResourceIdentifier resourceId : nodeEvaluation.outputs().keySet()) {
-                if (resourceId instanceof FalconResourceId falconId) {
+                if (resourceId instanceof FalconRawTopic falconId) {
                     attributeTypes.add(falconId.attribute());
                 }
             }
@@ -78,35 +78,35 @@ public class DynamicColorManager {
         // Extract from results
         for (Map.Entry<ResourceIdentifier, Result<Object>> result : evaluationResult.results().entrySet()) {
             ResourceIdentifier resourceId = result.getKey();
-            if (resourceId instanceof FalconResourceId falconId) {
+            if (resourceId instanceof FalconRawTopic falconId) {
                 attributeTypes.add(falconId.attribute());
             }
         }
         
         // Extract from adhocOverride if present
-        if (evaluationResult.adhocOverride().isPresent()) {
-            var adhocOverride = evaluationResult.adhocOverride().get();
+        if (evaluationResult.request().override().isPresent()) {
+            var adhocOverride = evaluationResult.request().override().get();
             
             // adhocInputs
             for (var input : adhocOverride.adhocInputs().entrySet()) {
-                if (input.getKey().rid() instanceof FalconResourceId falconId) {
+                if (input.getKey().rid() instanceof FalconRawTopic falconId) {
                     attributeTypes.add(falconId.attribute());
                 }
             }
             
             // adhocOutputs
             for (var output : adhocOverride.adhocOutputs().entrySet()) {
-                if (output.getKey().rid() instanceof FalconResourceId falconId) {
+                if (output.getKey().rid() instanceof FalconRawTopic falconId) {
                     attributeTypes.add(falconId.attribute());
                 }
             }
             
             // adhocFlywires
             for (var flywire : adhocOverride.adhocFlywires()) {
-                if (flywire.source().rid() instanceof FalconResourceId falconId) {
+                if (flywire.source().rid() instanceof FalconRawTopic falconId) {
                     attributeTypes.add(falconId.attribute());
                 }
-                if (flywire.target().rid() instanceof FalconResourceId falconId) {
+                if (flywire.target().rid() instanceof FalconRawTopic falconId) {
                     attributeTypes.add(falconId.attribute());
                 }
             }
@@ -161,11 +161,11 @@ public class DynamicColorManager {
      * Get the color for a specific ResourceIdentifier.
      */
     public Color getConnectionPointColor(ResourceIdentifier resourceId) {
-        if (resourceId instanceof FalconResourceId falconId) {
+        if (resourceId instanceof FalconRawTopic falconId) {
             return attributeColorMap.getOrDefault(falconId.attribute(), defaultColor);
         }
         
-        // For non-FalconResourceId types, use the default color
+        // For non-FalconRawTopic types, use the default color
         return defaultColor;
     }
     

@@ -6,6 +6,7 @@ import javafx.scene.control.SplitPane;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+import me.vincentzz.graph.model.EvaluationBundle;
 import me.vincentzz.graph.json.ConstructionalJsonUtil;
 import me.vincentzz.visual.model.VisualizationModel;
 import me.vincentzz.visual.view.CalculationCanvas;
@@ -108,21 +109,21 @@ public class MainController {
      */
     public void loadEvaluationResult(File file) {
         setStatus("Loading file: " + file.getName() + "...");
-        
+
         // Load asynchronously to avoid blocking the UI
         CompletableFuture.supplyAsync(() -> {
             try {
                 String json = Files.readString(file.toPath());
-                return ConstructionalJsonUtil.fromJsonEvaluationResult(json).get();
+                return ConstructionalJsonUtil.fromJsonEvaluationBundle(json).get();
             } catch (Exception e) {
-                throw new RuntimeException("Failed to load EvaluationResult from file", e);
+                throw new RuntimeException("Failed to load EvaluationBundle from file", e);
             }
-        }).thenAcceptAsync(evaluationResult -> {
+        }).thenAcceptAsync(bundle -> {
             // Update UI on JavaFX Application Thread
             Platform.runLater(() -> {
                 try {
-                    setModel(new VisualizationModel(evaluationResult));
-                    setStatus("Loaded: " + file.getName() + " - Showing " + 
+                    setModel(new VisualizationModel(bundle));
+                    setStatus("Loaded: " + file.getName() + " - Showing " +
                              model.getNodesForCurrentPath().size() + " nodes");
                 } catch (Exception e) {
                     setStatus("Error processing file: " + e.getMessage());
@@ -186,7 +187,7 @@ public class MainController {
         if (model != null) {
             // Handle root navigation (home button)
             if (segmentIndex == 0) {
-                model.navigateToPath(model.getEvaluationResult().requestedNodePath());
+                model.navigateToPath(model.getEvaluationResult().request().path());
                 updateAllViews();
                 setStatus("Navigated to root");
                 return;
@@ -251,14 +252,14 @@ public class MainController {
         try {
             // Extract components from the evaluation result
             var evaluationResult = model.getEvaluationResult();
-            var graph = evaluationResult.graph();
+            var graph = model.getGraph();
             var currentPath = model.getCurrentPath();
-            var snapshot = evaluationResult.snapshot();
-            var requestedNodePath = evaluationResult.requestedNodePath();
-            var adhocOverride = evaluationResult.adhocOverride();
-            
-            // Extract requested resources from the results map (these were the originally requested resources)
-            var requestedResources = evaluationResult.results().keySet();
+            var snapshot = evaluationResult.request().snapshot();
+            var requestedNodePath = evaluationResult.request().path();
+            var adhocOverride = evaluationResult.request().override();
+
+            // Extract requested resources from the request
+            var requestedResources = evaluationResult.request().rids();
             
             me.vincentzz.visual.view.EditNodeWindow editWindow = 
                 new me.vincentzz.visual.view.EditNodeWindow(
@@ -282,18 +283,18 @@ public class MainController {
     /**
      * Handle the completion of an edit operation with a new EvaluationResult.
      */
-    private void handleEditCompleted(me.vincentzz.graph.model.EvaluationResult newEvaluationResult) {
-        if (newEvaluationResult != null) {
+    private void handleEditCompleted(me.vincentzz.graph.model.EvaluationBundle newBundle) {
+        if (newBundle != null) {
             try {
-                // Create a new model with the updated evaluation result
-                VisualizationModel newModel = new VisualizationModel(newEvaluationResult);
-                
+                // Create a new model with the updated bundle
+                VisualizationModel newModel = new VisualizationModel(newBundle);
+
                 // Preserve the current path if possible
-                Path currentPath = model != null ? model.getCurrentPath() : newEvaluationResult.requestedNodePath();
-                
+                Path currentPath = model != null ? model.getCurrentPath() : newBundle.evaluationResult().request().path();
+
                 // Update the model
                 setModel(newModel);
-                
+
                 // Navigate to the preserved path if it exists in the new model
                 if (currentPath != null) {
                     try {
@@ -302,14 +303,14 @@ public class MainController {
                         setStatus("Edit completed - Updated graph with new results");
                     } catch (Exception e) {
                         // If navigation fails, go to root
-                        model.navigateToPath(newEvaluationResult.requestedNodePath());
+                        model.navigateToPath(newBundle.evaluationResult().request().path());
                         updateAllViews();
                         setStatus("Edit completed - Updated graph (navigated to root due to path change)");
                     }
                 } else {
                     setStatus("Edit completed - Updated graph with new results");
                 }
-                
+
             } catch (Exception e) {
                 setStatus("Error updating graph: " + e.getMessage());
                 e.printStackTrace();

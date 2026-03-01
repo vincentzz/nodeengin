@@ -11,7 +11,7 @@ import me.vincentzz.graph.model.ResourceIdentifier;
 import me.vincentzz.graph.node.CalculationNode;
 import me.vincentzz.graph.node.ConnectionPoint;
 import me.vincentzz.graph.node.Flywire;
-import me.vincentzz.falcon.ifo.FalconResourceId;
+import me.vincentzz.falcon.rid.FalconRawTopic;
 import me.vincentzz.visual.util.ColorScheme;
 
 import java.nio.file.Path;
@@ -91,8 +91,8 @@ public class CreateFlywireDialog extends Dialog<Flywire> {
         }
 
         // Pre-fill custom ResourceId fields from source resource
-        if (preSelectedSourceResource instanceof FalconResourceId frid) {
-            targetIfoField.setText(frid.ifo());
+        if (preSelectedSourceResource instanceof FalconRawTopic frid) {
+            targetIfoField.setText(frid.symbol());
             targetSourceField.setText(frid.source());
             String attrSimpleName = frid.attribute().getSimpleName();
             targetAttributeCombo.setValue(attrSimpleName);
@@ -175,7 +175,7 @@ public class CreateFlywireDialog extends Dialog<Flywire> {
         });
 
         // Custom mode fields
-        Label tgtIfoLabel = new Label("IFO:");
+        Label tgtIfoLabel = new Label("Symbol:");
         tgtIfoLabel.setTextFill(ColorScheme.TEXT_PRIMARY);
         targetIfoField = new TextField();
         targetIfoField.setPromptText("e.g. GOOGLE");
@@ -266,16 +266,16 @@ public class CreateFlywireDialog extends Dialog<Flywire> {
                         tgtRid = targetRidCombo.getValue();
                         if (tgtRid == null) return null;
                     } else {
-                        // Build FalconResourceId from custom fields
-                        String ifo = targetIfoField.getText();
+                        // Build FalconRawTopic from custom fields
+                        String symbol = targetIfoField.getText();
                         String source = targetSourceField.getText();
                         String attrName = targetAttributeCombo.getValue();
-                        if (ifo == null || ifo.isBlank() || source == null || source.isBlank()
+                        if (symbol == null || symbol.isBlank() || source == null || source.isBlank()
                                 || attrName == null || attrName.isBlank()) {
                             return null;
                         }
                         Class<?> attrClass = resolveAttributeClass(attrName);
-                        tgtRid = FalconResourceId.of(ifo, source, attrClass);
+                        tgtRid = FalconRawTopic.of(symbol, source, attrClass);
                     }
 
                     ConnectionPoint sourcePoint = ConnectionPoint.of(Path.of(srcNode), srcRid);

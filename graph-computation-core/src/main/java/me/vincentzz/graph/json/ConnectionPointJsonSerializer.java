@@ -11,7 +11,7 @@ import java.io.IOException;
 
 /**
  * JSON serializer for ConnectionPoint.
- * Produces: {"nodePath": "/root/node", "rid": {"type": "FalconResourceId", "data": {...}}}
+ * Produces: {"nodePath": "/root/node", "rid": {"type": "FalconRawTopic", "data": {...}}}
  */
 public class ConnectionPointJsonSerializer extends JsonSerializer<ConnectionPoint> {
 

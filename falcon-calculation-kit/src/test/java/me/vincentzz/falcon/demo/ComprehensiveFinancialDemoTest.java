@@ -4,15 +4,15 @@ import me.vincentzz.falcon.attribute.Ask;
 import me.vincentzz.falcon.attribute.Bid;
 import me.vincentzz.falcon.attribute.MidPrice;
 import me.vincentzz.falcon.attribute.Spread;
-import me.vincentzz.falcon.ifo.FalconResourceId;
+import me.vincentzz.falcon.rid.FalconRawTopic;
 import me.vincentzz.falcon.node.AskProvider;
 import me.vincentzz.falcon.node.BidProvider;
 import me.vincentzz.falcon.node.HardcodeAttributeProvider;
 import me.vincentzz.falcon.node.MidSpreadCalculator;
 import me.vincentzz.graph.model.AdhocOverride;
 import me.vincentzz.graph.CalculationEngine;
+import me.vincentzz.graph.model.EvaluationBundle;
 import me.vincentzz.graph.model.EvaluationResult;
-import me.vincentzz.graph.model.ResourceIdentifier;
 import me.vincentzz.graph.model.Snapshot;
 import me.vincentzz.graph.json.ConstructionalJsonUtil;
 import me.vincentzz.graph.json.NodeTypeRegistry;
@@ -50,9 +50,9 @@ public class ComprehensiveFinancialDemoTest {
 
     private CalculationEngine engine;
     private NodeGroup root;
-    private FalconResourceId appleMidPriceId;
-    private FalconResourceId googleMidPriceId;
-    private FalconResourceId googleSpreadId;
+    private FalconRawTopic appleMidPriceId;
+    private FalconRawTopic googleMidPriceId;
+    private FalconRawTopic googleSpreadId;
 
     @BeforeEach
     void setUp() {
@@ -64,7 +64,13 @@ public class ComprehensiveFinancialDemoTest {
         NodeTypeRegistry.registerNodeType("HardcodeAttributeProvider", HardcodeAttributeProvider.class);
 
         // Register resource types
-        NodeTypeRegistry.registerResourceType("FalconResourceId", FalconResourceId.class);
+        NodeTypeRegistry.registerResourceType("FalconRawTopic", FalconRawTopic.class);
+
+        // Register value types (attribute classes used in FalconRawTopic.type)
+        NodeTypeRegistry.registerValueType("Ask", Ask.class);
+        NodeTypeRegistry.registerValueType("Bid", Bid.class);
+        NodeTypeRegistry.registerValueType("MidPrice", MidPrice.class);
+        NodeTypeRegistry.registerValueType("Spread", Spread.class);
 
         // Create test data
         AskProvider appleAsk = new AskProvider("APPLE", "Bloomberg");
@@ -74,30 +80,30 @@ public class ComprehensiveFinancialDemoTest {
         MidSpreadCalculator appleMidCalculator = new MidSpreadCalculator("APPLE", "FALCON");
         MidSpreadCalculator googleMidCalculator = new MidSpreadCalculator("GOOGLE", "FALCON");
         HardcodeAttributeProvider hardcodedGoogleBid = new HardcodeAttributeProvider(
-                FalconResourceId.of("GOOGLE", "HARDCODED", Bid.class),
+                FalconRawTopic.of("GOOGLE", "HARDCODED", Bid.class),
                 new Bid(BigDecimal.valueOf(80), BigDecimal.valueOf(1), Instant.now())
         );
         HardcodeAttributeProvider hardcodedAppleAsk = new HardcodeAttributeProvider(
-                FalconResourceId.of("APPLE", "HARDCODED", Ask.class),
+                FalconRawTopic.of("APPLE", "HARDCODED", Ask.class),
                 new Ask(BigDecimal.valueOf(120), BigDecimal.valueOf(1), Instant.now())
         );
 
         NodeGroup rawGroup = NodeGroup.of("rawGroup", Set.of(appleAsk, appleBid, googleAsk, googleBid, hardcodedGoogleBid),
-                Set.of(), Exclude.of(Set.of(ConnectionPoint.of(Path.of("hard"), FalconResourceId.of("GOOGLE", "HARDCODED", Bid.class)))));
+                Set.of(), Exclude.of(Set.of(ConnectionPoint.of(Path.of("hard"), FalconRawTopic.of("GOOGLE", "HARDCODED", Bid.class)))));
 
         NodeGroup calGroup = NodeGroup.of("calGroup", Set.of(appleMidCalculator, googleMidCalculator),
                 Set.of(Flywire.of(
-                        ConnectionPoint.of(Path.of("/root/rawGroup/hard"), FalconResourceId.of("GOOGLE", "HARDCODED", Bid.class)),
-                        ConnectionPoint.of(Path.of("MID_GOOGLE"), FalconResourceId.of("GOOGLE", "Bloomberg", Bid.class))
+                        ConnectionPoint.of(Path.of("/root/rawGroup/hard"), FalconRawTopic.of("GOOGLE", "HARDCODED", Bid.class)),
+                        ConnectionPoint.of(Path.of("MID_GOOGLE"), FalconRawTopic.of("GOOGLE", "Bloomberg", Bid.class))
                 )), Exclude.of(Set.of()));
 
         root = NodeGroup.of("root", Set.of(rawGroup, calGroup, hardcodedAppleAsk));
 
         engine = new CalculationEngine(root);
 
-        appleMidPriceId = FalconResourceId.of("APPLE", "FALCON", MidPrice.class);
-        googleMidPriceId = FalconResourceId.of("GOOGLE", "FALCON", MidPrice.class);
-        googleSpreadId = FalconResourceId.of("GOOGLE", "FALCON", Spread.class);
+        appleMidPriceId = FalconRawTopic.of("APPLE", "FALCON", MidPrice.class);
+        googleMidPriceId = FalconRawTopic.of("GOOGLE", "FALCON", MidPrice.class);
+        googleSpreadId = FalconRawTopic.of("GOOGLE", "FALCON", Spread.class);
     }
 
     @Test
@@ -117,12 +123,12 @@ public class ComprehensiveFinancialDemoTest {
 
         // Create flywire for more interesting evaluation context
         Flywire adhocFlywire = Flywire.of(
-                ConnectionPoint.of(Path.of("/root/hard"), FalconResourceId.of("APPLE", "HARDCODED", Ask.class)),
-                ConnectionPoint.of(Path.of("/root/calGroup"), FalconResourceId.of("APPLE", "Bloomberg", Ask.class))
+                ConnectionPoint.of(Path.of("/root/hard"), FalconRawTopic.of("APPLE", "HARDCODED", Ask.class)),
+                ConnectionPoint.of(Path.of("/root/calGroup"), FalconRawTopic.of("APPLE", "Bloomberg", Ask.class))
         );
 
         AdhocOverride adhoc = new AdhocOverride(Map.of(), Map.of(
-                ConnectionPoint.of(Path.of("/root/calGroup/MID_GOOGLE"), FalconResourceId.of("GOOGLE", "FALCON", Spread.class)),
+                ConnectionPoint.of(Path.of("/root/calGroup/MID_GOOGLE"), FalconRawTopic.of("GOOGLE", "FALCON", Spread.class)),
                 Success.of(new Spread(BigDecimal.ONE, Instant.now()))
         ), Set.of(adhocFlywire));
 
@@ -133,47 +139,51 @@ public class ComprehensiveFinancialDemoTest {
             System.out.println(evalResult);
             System.out.println(end.toEpochMilli() - start.toEpochMilli() + "ms. ");
 
-            CalculationNode subGraph = evalResult.graph();
+            CalculationNode subGraph = engine2.rootNode();
             CalculationEngine engine_new = new CalculationEngine(subGraph);
             EvaluationResult evalResult_new = engine_new.evaluateForResult(Snapshot.ofNow(), Set.of(appleMidPriceId, googleMidPriceId, googleSpreadId), Optional.of(adhoc));
             System.out.println(evalResult_new);
 
-            assertEquals(evalResult.graph(), evalResult_new.graph());
+            assertEquals(engine2.rootNode(), engine_new.rootNode());
 
             Result<String> jsonResult = ConstructionalJsonUtil.toJson(subGraph);
             System.out.println(jsonResult);
-            Result<String> resultJson = ConstructionalJsonUtil.toJsonEvaluationResult(evalResult);
-            System.out.println(resultJson);
-            System.err.println("DEBUG TEST: resultJson.isSuccess() = " + resultJson.isSuccess());
-            if (!resultJson.isSuccess()) {
-                System.err.println("DEBUG TEST: resultJson failed with error: " + resultJson);
+
+            // Test EvaluationBundle round-trip (graph + evaluationResult)
+            EvaluationBundle bundle = new EvaluationBundle(engine2.rootNode(), evalResult);
+            Result<String> bundleJson = ConstructionalJsonUtil.toJsonEvaluationBundle(bundle);
+            System.out.println(bundleJson);
+            System.err.println("DEBUG TEST: bundleJson.isSuccess() = " + bundleJson.isSuccess());
+            if (!bundleJson.isSuccess()) {
+                System.err.println("DEBUG TEST: bundleJson failed with error: " + bundleJson);
                 throw new RuntimeException("JSON serialization failed!");
             }
-            String jsonString = resultJson.get();
-            System.err.println("DEBUG TEST: About to call fromJsonEvaluationResult with JSON length: " + jsonString.length());
-            Result<EvaluationResult> parseFromJson = ConstructionalJsonUtil.fromJsonEvaluationResult(jsonString);
-            System.err.println("DEBUG TEST: fromJsonEvaluationResult returned: " + parseFromJson.isSuccess());
-            if (!parseFromJson.isSuccess()) {
-                System.err.println("DEBUG TEST: parseFromJson failed with error: " + parseFromJson);
+            String jsonString = bundleJson.get();
+            System.err.println("DEBUG TEST: About to call fromJsonEvaluationBundle with JSON length: " + jsonString.length());
+            Result<EvaluationBundle> parsedBundle = ConstructionalJsonUtil.fromJsonEvaluationBundle(jsonString);
+            System.err.println("DEBUG TEST: fromJsonEvaluationBundle returned: " + parsedBundle.isSuccess());
+            if (!parsedBundle.isSuccess()) {
+                System.err.println("DEBUG TEST: parsedBundle failed with error: " + parsedBundle);
             }
-            assertTrue(parseFromJson.isSuccess());
+            assertTrue(parsedBundle.isSuccess());
 
-            assertEquals(evalResult.snapshot(), parseFromJson.get().snapshot());
-            assertEquals(evalResult.requestedNodePath(), parseFromJson.get().requestedNodePath());
-            assertEquals(evalResult.results(), parseFromJson.get().results());
-            assertEquals(evalResult.adhocOverride(), parseFromJson.get().adhocOverride());
-            assertEquals(evalResult.graph(), parseFromJson.get().graph());
-            var oldEvaluationMap = evalResult.nodeEvaluationMap();
-            var newEvaluationMap = parseFromJson.get().nodeEvaluationMap();
+            EvaluationResult parsedResult = parsedBundle.get().evaluationResult();
+            assertEquals(evalResult.request().snapshot(), parsedResult.request().snapshot());
+            assertEquals(evalResult.request().path(), parsedResult.request().path());
+            assertEquals(evalResult.results(), parsedResult.results());
+            assertEquals(evalResult.request().override(), parsedResult.request().override());
+            assertEquals(engine2.rootNode(), parsedBundle.get().graph());
+            var oldEvaluationMap = evalResult.evaluations();
+            var newEvaluationMap = parsedResult.evaluations();
             assertEquals(oldEvaluationMap, newEvaluationMap);
-            assertEquals(evalResult, parseFromJson.get());
-            System.out.println(parseFromJson);
+            assertEquals(evalResult, parsedResult);
+            System.out.println(parsedBundle);
 
             Result<CalculationNode> parsedNode = ConstructionalJsonUtil.fromJson(jsonResult.get());
             assertEquals(subGraph, parsedNode.get());
             CalculationEngine engine_parsed = new CalculationEngine(parsedNode.get());
             EvaluationResult evalResult_parsed = engine_parsed.evaluateForResult(Snapshot.ofNow(), Set.of(appleMidPriceId, googleMidPriceId, googleSpreadId), Optional.of(adhoc));
-            assertEquals(evalResult.graph(), evalResult_parsed.graph());
+            assertEquals(engine2.rootNode(), engine_parsed.rootNode());
         }
     }
 }

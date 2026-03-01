@@ -141,13 +141,16 @@ public final class CalculationEngine {
         Result<Map<ResourceIdentifier, OutputResult>> tryResult = Result.Try(() -> evaluateWithContext(path, requestedResources, context, Collections.unmodifiableSet(new LinkedHashSet<>())));
         Map<ResourceIdentifier, OutputResult> resourceResultMap = flattenResourceResult(requestedResources, tryResult);
 
-        return new EvaluationResult(
+        EvaluationRequest request = new EvaluationRequest(
+                Set.copyOf(requestedResources),
                 snapshot,
-                context.requestedNodePath(),
-                adhocOverride,
+                context.requestedNodePath(),  // maps to EvaluationRequest.path
+                adhocOverride
+        );
+        return new EvaluationResult(
+                request,
                 MapUtils.mapValue(resourceResultMap, (k, v) -> v.value()),
-                context.nodeEvaluationMap(),
-                rootNode
+                context.nodeEvaluationMap()
         );
     }
 

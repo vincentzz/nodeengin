@@ -9,9 +9,7 @@ import me.vincentzz.graph.node.CalculationNode;
 import me.vincentzz.graph.node.ConnectionPoint;
 import me.vincentzz.graph.node.Flywire;
 import me.vincentzz.graph.node.NodeGroup;
-import me.vincentzz.graph.scope.Exclude;
-import me.vincentzz.graph.scope.Include;
-import me.vincentzz.graph.scope.Scope;
+import me.vincentzz.graph.scope.*;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -22,7 +20,7 @@ import java.util.*;
  *
  * Consumes the new format where:
  * - NodeGroup: {"type":"NodeGroup","name":"root","nodes":[...],"flywires":[...],"exports":{"exclude":[]}}
- * - AtomicNode: {"type":"MidSpreadCalculator","params":[{"ifo":"GOOGLE","source":"FALCON"}, ...]}
+ * - AtomicNode: {"type":"MidSpreadCalculator","params":[{"symbol":"GOOGLE","source":"FALCON"}, ...]}
  */
 public class ConstructionalJsonDeserializer extends JsonDeserializer<CalculationNode> {
 
@@ -144,25 +142,31 @@ public class ConstructionalJsonDeserializer extends JsonDeserializer<Calculation
         if (scopeNode == null || scopeNode.isNull()) {
             return Exclude.of(Set.of());
         }
-
         if (scopeNode.has("include")) {
-            Set<ConnectionPoint> points = parseScopeValues(scopeNode.get("include"));
-            return Include.of(points);
+            return Include.of(parseScopeSet(scopeNode.get("include")));
         } else if (scopeNode.has("exclude")) {
-            Set<ConnectionPoint> points = parseScopeValues(scopeNode.get("exclude"));
-            return Exclude.of(points);
+            return Exclude.of(parseScopeSet(scopeNode.get("exclude")));
         }
-
         return Exclude.of(Set.of());
     }
 
-    private Set<ConnectionPoint> parseScopeValues(JsonNode arrayNode) {
+    private ScopeSet<ConnectionPoint> parseScopeSet(JsonNode node) {
+        String type = node.get("type").asText();
+        if ("RegExMatch".equals(type)) {
+            Map<String, String> matchers = new LinkedHashMap<>();
+            node.get("fieldMatcher").fields().forEachRemaining(e ->
+                matchers.put(e.getKey(), e.getValue().asText())
+            );
+            return new RegExMatch<>(matchers);
+        }
+        // Default: FullSet
         Set<ConnectionPoint> points = new HashSet<>();
-        if (arrayNode != null && arrayNode.isArray()) {
-            for (JsonNode cpNode : arrayNode) {
+        JsonNode elementsNode = node.get("elements");
+        if (elementsNode != null && elementsNode.isArray()) {
+            for (JsonNode cpNode : elementsNode) {
                 points.add(ConnectionPointJsonDeserializer.deserializeFromNode(cpNode));
             }
         }
-        return points;
+        return new FullSet<>(points);
     }
 }

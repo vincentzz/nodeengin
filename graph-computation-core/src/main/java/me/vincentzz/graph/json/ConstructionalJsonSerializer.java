@@ -7,9 +7,7 @@ import me.vincentzz.graph.model.ResourceIdentifier;
 import me.vincentzz.graph.node.CalculationNode;
 import me.vincentzz.graph.node.ConnectionPoint;
 import me.vincentzz.graph.node.NodeGroup;
-import me.vincentzz.graph.scope.Exclude;
-import me.vincentzz.graph.scope.Include;
-import me.vincentzz.graph.scope.Scope;
+import me.vincentzz.graph.scope.*;
 import me.vincentzz.lang.PathUtils;
 
 import java.io.IOException;
@@ -24,7 +22,7 @@ import java.util.stream.Collectors;
  * {"type":"NodeGroup","name":"root","nodes":[...],"flywires":[...],"exports":{"exclude":[]}}
  *
  * AtomicNode format (batched by type):
- * {"type":"MidSpreadCalculator","params":[{"ifo":"GOOGLE","source":"FALCON"}, ...]}
+ * {"type":"MidSpreadCalculator","params":[{"symbol":"GOOGLE","source":"FALCON"}, ...]}
  */
 public class ConstructionalJsonSerializer extends JsonSerializer<CalculationNode> {
 
@@ -118,20 +116,37 @@ public class ConstructionalJsonSerializer extends JsonSerializer<CalculationNode
 
     private void serializeScope(Scope<ConnectionPoint> scope, JsonGenerator gen, SerializerProvider serializers) throws IOException {
         gen.writeStartObject();
+        String key;
+        ScopeSet<ConnectionPoint> scopeSet;
         if (scope instanceof Include<ConnectionPoint> include) {
-            gen.writeArrayFieldStart("include");
-            for (ConnectionPoint cp : include.resources()) {
-                serializers.findValueSerializer(ConnectionPoint.class)
-                        .serialize(cp, gen, serializers);
-            }
-            gen.writeEndArray();
+            key = "include";
+            scopeSet = include.scopeSet();
         } else if (scope instanceof Exclude<ConnectionPoint> exclude) {
-            gen.writeArrayFieldStart("exclude");
-            for (ConnectionPoint cp : exclude.resources()) {
-                serializers.findValueSerializer(ConnectionPoint.class)
-                        .serialize(cp, gen, serializers);
+            key = "exclude";
+            scopeSet = exclude.scopeSet();
+        } else { return; }
+
+        gen.writeFieldName(key);
+        serializeScopeSet(scopeSet, gen, serializers);
+        gen.writeEndObject();
+    }
+
+    private void serializeScopeSet(ScopeSet<ConnectionPoint> scopeSet, JsonGenerator gen, SerializerProvider serializers) throws IOException {
+        gen.writeStartObject();
+        if (scopeSet instanceof FullSet<ConnectionPoint> fullSet) {
+            gen.writeStringField("type", "FullSet");
+            gen.writeArrayFieldStart("elements");
+            for (ConnectionPoint cp : fullSet.elements()) {
+                serializers.findValueSerializer(ConnectionPoint.class).serialize(cp, gen, serializers);
             }
             gen.writeEndArray();
+        } else if (scopeSet instanceof RegExMatch<ConnectionPoint> regEx) {
+            gen.writeStringField("type", "RegExMatch");
+            gen.writeObjectFieldStart("fieldMatcher");
+            for (var entry : regEx.fieldMatcher().entrySet()) {
+                gen.writeStringField(entry.getKey(), entry.getValue());
+            }
+            gen.writeEndObject();
         }
         gen.writeEndObject();
     }

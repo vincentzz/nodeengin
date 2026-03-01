@@ -29,40 +29,6 @@ public class NodeTypeRegistry {
         registerClassAlias("Boolean", Boolean.class);
         registerClassAlias("Long", Long.class);
         registerClassAlias("Float", Float.class);
-
-        // Try to register falcon types if on classpath
-        tryRegister("me.vincentzz.falcon.node.AskProvider", "AskProvider", "node");
-        tryRegister("me.vincentzz.falcon.node.BidProvider", "BidProvider", "node");
-        tryRegister("me.vincentzz.falcon.node.MidSpreadCalculator", "MidSpreadCalculator", "node");
-        tryRegister("me.vincentzz.falcon.node.HardcodeAttributeProvider", "HardcodeAttributeProvider", "node");
-        tryRegister("me.vincentzz.falcon.node.VolumeProvider", "VolumeProvider", "node");
-        tryRegister("me.vincentzz.falcon.node.VwapCalculator", "VwapCalculator", "node");
-        tryRegister("me.vincentzz.falcon.node.MarkToMarketCalculator", "MarkToMarketCalculator", "node");
-        tryRegister("me.vincentzz.falcon.ifo.FalconResourceId", "FalconResourceId", "resource");
-        tryRegister("me.vincentzz.falcon.attribute.Ask", "Ask", "value");
-        tryRegister("me.vincentzz.falcon.attribute.Bid", "Bid", "value");
-        tryRegister("me.vincentzz.falcon.attribute.MidPrice", "MidPrice", "value");
-        tryRegister("me.vincentzz.falcon.attribute.Spread", "Spread", "value");
-        tryRegister("me.vincentzz.falcon.attribute.Volume", "Volume", "value");
-        tryRegister("me.vincentzz.falcon.attribute.Vwap", "Vwap", "value");
-        tryRegister("me.vincentzz.falcon.attribute.MarkToMarket", "MarkToMarket", "value");
-
-        // Try to register test types
-        tryRegister("me.vincentzz.graph.BasicResourceIdentifier", "BasicResourceIdentifier", "resource");
-    }
-
-    @SuppressWarnings("unchecked")
-    private static void tryRegister(String className, String simpleName, String kind) {
-        try {
-            Class<?> clazz = Class.forName(className);
-            switch (kind) {
-                case "node" -> NODE_TYPES.put(simpleName, (Class<? extends CalculationNode>) clazz);
-                case "resource" -> RESOURCE_TYPES.put(simpleName, (Class<? extends ResourceIdentifier>) clazz);
-                case "value" -> VALUE_TYPES.put(simpleName, clazz);
-            }
-        } catch (ClassNotFoundException e) {
-            // Not on classpath, skip
-        }
     }
 
     public static void registerNodeType(String typeName, Class<? extends CalculationNode> nodeClass) {
@@ -116,9 +82,8 @@ public class NodeTypeRegistry {
         clazz = VALUE_TYPES.get(simpleName);
         if (clazz != null) return clazz;
 
-        // Try common packages
+        // Try common JDK packages
         String[] packages = {
-                "me.vincentzz.falcon.attribute.",
                 "java.lang.",
                 "java.math.",
                 "java.time."

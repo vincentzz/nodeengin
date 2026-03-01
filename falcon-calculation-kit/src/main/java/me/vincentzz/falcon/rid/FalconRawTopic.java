@@ -1,11 +1,11 @@
-package me.vincentzz.falcon.ifo;
+package me.vincentzz.falcon.rid;
 
 import me.vincentzz.graph.model.ResourceIdentifier;
 
-public record FalconResourceId(String ifo, String source, Class<?> attribute)
+public record FalconRawTopic(String symbol, String source, Class<?> attribute)
         implements ResourceIdentifier {
-    public static FalconResourceId of(String ifo, String source, Class<?> attribute) {
-        return new FalconResourceId(ifo, source, attribute);
+    public static FalconRawTopic of(String symbol, String source, Class<?> attribute) {
+        return new FalconRawTopic(symbol, source, attribute);
     }
 
     @Override
@@ -15,8 +15,8 @@ public record FalconResourceId(String ifo, String source, Class<?> attribute)
 
     @Override
     public String toString() {
-        return "FalconResourceId[" +
-                "ifo='" + ifo + '\'' +
+        return "FalconRawTopic[" +
+                "symbol='" + symbol + '\'' +
                 ", source='" + source + '\'' +
                 ", attribute=" + attribute.getSimpleName() +
                 ']';

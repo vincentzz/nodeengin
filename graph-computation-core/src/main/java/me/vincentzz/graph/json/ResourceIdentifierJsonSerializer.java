@@ -10,7 +10,7 @@ import java.lang.reflect.RecordComponent;
 
 /**
  * JSON serializer for ResourceIdentifier.
- * Produces: {"type": "FalconResourceId", "data": {"ifo": ..., "source": ..., "attribute": ...}}
+ * Produces: {"type": "FalconRawTopic", "data": {"symbol": ..., "source": ..., "attribute": ...}}
  */
 public class ResourceIdentifierJsonSerializer extends JsonSerializer<ResourceIdentifier> {
 

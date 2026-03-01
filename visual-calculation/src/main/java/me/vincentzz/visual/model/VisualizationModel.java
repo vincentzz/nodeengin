@@ -1,6 +1,7 @@
 package me.vincentzz.visual.model;
 
 import me.vincentzz.graph.CalculationEngine;
+import me.vincentzz.graph.model.EvaluationBundle;
 import me.vincentzz.graph.model.EvaluationResult;
 import me.vincentzz.graph.model.ResourceIdentifier;
 import me.vincentzz.graph.node.CalculationNode;
@@ -21,16 +22,17 @@ import java.util.stream.Collectors;
 public class VisualizationModel {
     
     private final EvaluationResult evaluationResult;
+    private final CalculationNode graph;
     private final CalculationEngine calculationEngine;
     private Path currentPath;
     private final Map<Path, NodeViewModel> nodeViewModels;
     private final List<ConnectionViewModel> connections;
-    
-    public VisualizationModel(EvaluationResult evaluationResult) {
-        this.evaluationResult = evaluationResult;
-        // Create CalculationEngine from the EvaluationResult's graph field
-        this.calculationEngine = new CalculationEngine(evaluationResult.graph());
-        this.currentPath = evaluationResult.requestedNodePath();
+
+    public VisualizationModel(EvaluationBundle bundle) {
+        this.evaluationResult = bundle.evaluationResult();
+        this.graph = bundle.graph();
+        this.calculationEngine = new CalculationEngine(bundle.graph());
+        this.currentPath = evaluationResult.request().path();
         this.nodeViewModels = new HashMap<>();
         this.connections = new ArrayList<>();
         
@@ -59,7 +61,7 @@ public class VisualizationModel {
     private void buildModel() {
         // Build node view models from node evaluation map
         for (Map.Entry<Path, me.vincentzz.graph.model.NodeEvaluation> entry :
-             evaluationResult.nodeEvaluationMap().entrySet()) {
+             evaluationResult.evaluations().entrySet()) {
             Path nodePath = entry.getKey();
             me.vincentzz.graph.model.NodeEvaluation nodeEvaluation = entry.getValue();
             
@@ -122,7 +124,7 @@ public class VisualizationModel {
     private void buildConditionalConnections() {
         // Extract conditional inputs from nodeEvaluationMap
         for (Map.Entry<Path, me.vincentzz.graph.model.NodeEvaluation> entry : 
-             evaluationResult.nodeEvaluationMap().entrySet()) {
+             evaluationResult.evaluations().entrySet()) {
             Path targetPath = entry.getKey();
             me.vincentzz.graph.model.NodeEvaluation nodeEvaluation = entry.getValue();
             
@@ -149,8 +151,8 @@ public class VisualizationModel {
     }
     
     private void buildFlywireConnections() {
-        if (evaluationResult.adhocOverride().isPresent()) {
-            evaluationResult.adhocOverride().get().adhocFlywires().forEach(flywire -> {
+        if (evaluationResult.request().override().isPresent()) {
+            evaluationResult.request().override().get().adhocFlywires().forEach(flywire -> {
                 connections.add(new ConnectionViewModel(
                     flywire.source().nodePath(),
                     flywire.source().rid(),
@@ -182,7 +184,7 @@ public class VisualizationModel {
         }
         
         // Add inputs from nodeEvaluationMap for completeness
-        me.vincentzz.graph.model.NodeEvaluation nodeEvaluation = evaluationResult.nodeEvaluationMap().get(nodePath);
+        me.vincentzz.graph.model.NodeEvaluation nodeEvaluation = evaluationResult.evaluations().get(nodePath);
         if (nodeEvaluation != null) {
             allInputs.addAll(nodeEvaluation.inputs().keySet());
         }
@@ -204,7 +206,7 @@ public class VisualizationModel {
 
         // Collect what children produce and consume from nodeEvaluationMap
         for (Map.Entry<Path, me.vincentzz.graph.model.NodeEvaluation> entry :
-             evaluationResult.nodeEvaluationMap().entrySet()) {
+             evaluationResult.evaluations().entrySet()) {
             Path childPath = entry.getKey();
             String childPathStr = PathUtils.toUnixString(childPath);
 
@@ -242,7 +244,7 @@ public class VisualizationModel {
         }
         
         // Fallback: Get outputs from nodeEvaluationMap
-        me.vincentzz.graph.model.NodeEvaluation nodeEvaluation = evaluationResult.nodeEvaluationMap().get(nodePath);
+        me.vincentzz.graph.model.NodeEvaluation nodeEvaluation = evaluationResult.evaluations().get(nodePath);
         
         return nodeEvaluation != null ? nodeEvaluation.outputs().keySet() : Set.of();
     }
@@ -308,6 +310,10 @@ public class VisualizationModel {
     
     public EvaluationResult getEvaluationResult() {
         return evaluationResult;
+    }
+
+    public CalculationNode getGraph() {
+        return graph;
     }
     
     public List<String> getPathSegments() {

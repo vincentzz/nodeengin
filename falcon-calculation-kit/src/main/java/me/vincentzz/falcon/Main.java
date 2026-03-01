@@ -4,7 +4,7 @@ import me.vincentzz.falcon.attribute.Ask;
 import me.vincentzz.falcon.attribute.Bid;
 import me.vincentzz.falcon.attribute.MidPrice;
 import me.vincentzz.falcon.attribute.Spread;
-import me.vincentzz.falcon.ifo.FalconResourceId;
+import me.vincentzz.falcon.rid.FalconRawTopic;
 import me.vincentzz.falcon.node.AskProvider;
 import me.vincentzz.falcon.node.BidProvider;
 import me.vincentzz.falcon.node.HardcodeAttributeProvider;
@@ -51,7 +51,13 @@ public class Main {
         NodeTypeRegistry.registerNodeType("HardcodeAttributeProvider", HardcodeAttributeProvider.class);
 
         // Register resource types
-        NodeTypeRegistry.registerResourceType("FalconResourceId", FalconResourceId.class);
+        NodeTypeRegistry.registerResourceType("FalconRawTopic", FalconRawTopic.class);
+
+        // Register value types (attribute classes used in FalconRawTopic.type)
+        NodeTypeRegistry.registerValueType("Ask", Ask.class);
+        NodeTypeRegistry.registerValueType("Bid", Bid.class);
+        NodeTypeRegistry.registerValueType("MidPrice", MidPrice.class);
+        NodeTypeRegistry.registerValueType("Spread", Spread.class);
 
         // Create test data
         AskProvider appleAsk = new AskProvider("APPLE", "Bloomberg");
@@ -61,46 +67,46 @@ public class Main {
         MidSpreadCalculator appleMidCalculator = new MidSpreadCalculator("APPLE", "FALCON");
         MidSpreadCalculator googleMidCalculator = new MidSpreadCalculator("GOOGLE", "FALCON");
         HardcodeAttributeProvider hardcodedGoogleBid = new HardcodeAttributeProvider(
-                FalconResourceId.of("GOOGLE", "HARDCODED", Bid.class),
+                FalconRawTopic.of("GOOGLE", "HARDCODED", Bid.class),
                 new Bid(BigDecimal.valueOf(80), BigDecimal.valueOf(1), Instant.now())
         );
         HardcodeAttributeProvider hardcodedAppleAsk = new HardcodeAttributeProvider(
-                FalconResourceId.of("APPLE", "HARDCODED", Ask.class),
+                FalconRawTopic.of("APPLE", "HARDCODED", Ask.class),
                 new Ask(BigDecimal.valueOf(120), BigDecimal.valueOf(1), Instant.now())
         );
 
         NodeGroup rawGroup = NodeGroup.of("rawGroup", Set.of(appleAsk, appleBid, googleAsk, googleBid, hardcodedGoogleBid),
-                Set.of(), Exclude.of(Set.of(ConnectionPoint.of(Path.of("hard"), FalconResourceId.of("GOOGLE", "HARDCODED", Bid.class)))));
+                Set.of(), Exclude.of(Set.of(ConnectionPoint.of(Path.of("hard"), FalconRawTopic.of("GOOGLE", "HARDCODED", Bid.class)))));
 
         NodeGroup calGroup = NodeGroup.of("calGroup", Set.of(appleMidCalculator, googleMidCalculator),
                 Set.of(Flywire.of(
-                        ConnectionPoint.of(Path.of("/root/rawGroup/hard"), FalconResourceId.of("GOOGLE", "HARDCODED", Bid.class)),
-                        ConnectionPoint.of(Path.of("MID_GOOGLE"), FalconResourceId.of("GOOGLE", "Bloomberg", Bid.class))
+                        ConnectionPoint.of(Path.of("/root/rawGroup/hard"), FalconRawTopic.of("GOOGLE", "HARDCODED", Bid.class)),
+                        ConnectionPoint.of(Path.of("MID_GOOGLE"), FalconRawTopic.of("GOOGLE", "Bloomberg", Bid.class))
                 )), Exclude.of(Set.of()));
 
         CalculationEngine engine;
         NodeGroup root;
-        FalconResourceId appleMidPriceId;
-        FalconResourceId googleMidPriceId;
-        FalconResourceId googleSpreadId;
+        FalconRawTopic appleMidPriceId;
+        FalconRawTopic googleMidPriceId;
+        FalconRawTopic googleSpreadId;
 
         root = NodeGroup.of("root", Set.of(rawGroup, calGroup, hardcodedAppleAsk));
 
         engine = new CalculationEngine(root);
-        appleMidPriceId = FalconResourceId.of("APPLE", "FALCON", MidPrice.class);
-        googleMidPriceId = FalconResourceId.of("GOOGLE", "FALCON", MidPrice.class);
-        googleSpreadId = FalconResourceId.of("GOOGLE", "FALCON", Spread.class);
+        appleMidPriceId = FalconRawTopic.of("APPLE", "FALCON", MidPrice.class);
+        googleMidPriceId = FalconRawTopic.of("GOOGLE", "FALCON", MidPrice.class);
+        googleSpreadId = FalconRawTopic.of("GOOGLE", "FALCON", Spread.class);
 
         CalculationEngine engine2 = new CalculationEngine(root);
 
         // Create flywire for more interesting evaluation context
         Flywire adhocFlywire = Flywire.of(
-                ConnectionPoint.of(Path.of("/root/hard"), FalconResourceId.of("APPLE", "HARDCODED", Ask.class)),
-                ConnectionPoint.of(Path.of("/root/calGroup"), FalconResourceId.of("APPLE", "Bloomberg", Ask.class))
+                ConnectionPoint.of(Path.of("/root/hard"), FalconRawTopic.of("APPLE", "HARDCODED", Ask.class)),
+                ConnectionPoint.of(Path.of("/root/calGroup"), FalconRawTopic.of("APPLE", "Bloomberg", Ask.class))
         );
 
         AdhocOverride adhoc = new AdhocOverride(Map.of(), Map.of(
-                ConnectionPoint.of(Path.of("/root/calGroup/MID_GOOGLE"), FalconResourceId.of("GOOGLE", "FALCON", Spread.class)),
+                ConnectionPoint.of(Path.of("/root/calGroup/MID_GOOGLE"), FalconRawTopic.of("GOOGLE", "FALCON", Spread.class)),
                 Success.of(new Spread(BigDecimal.ONE, Instant.now()))
         ), Set.of(adhocFlywire));
 
@@ -108,12 +114,12 @@ public class Main {
             Instant start = Instant.now();
             EvaluationResult evalResult = engine2.evaluateForResult(Snapshot.ofNow(), Set.of(appleMidPriceId, googleMidPriceId, googleSpreadId), Optional.of(adhoc));
 
-            CalculationNode subGraph = evalResult.graph();
+            CalculationNode subGraph = engine2.rootNode();
             CalculationEngine engine_new = new CalculationEngine(subGraph);
             EvaluationResult evalResult_new = engine_new.evaluateForResult(Snapshot.ofNow(), Set.of(appleMidPriceId, googleMidPriceId, googleSpreadId), Optional.of(adhoc));
             System.out.println(evalResult_new);
 
-            System.out.println("evalResult == evalResult_new ? :" + evalResult.graph().equals(evalResult_new.graph()));
+            System.out.println("evalResult == evalResult_new ? :" + engine2.rootNode().equals(engine_new.rootNode()));
 
             Result<String> jsonResult = ConstructionalJsonUtil.toJson(subGraph);
             System.out.println(jsonResult);
@@ -123,7 +129,7 @@ public class Main {
             CalculationEngine engine_parsed = new CalculationEngine(parsedNode.get());
             EvaluationResult evalResult_parsed = engine_parsed.evaluateForResult(Snapshot.ofNow(), Set.of(appleMidPriceId, googleMidPriceId, googleSpreadId), Optional.of(adhoc));
 
-            System.out.println("evalResult.graph == evalResult_parsed.gubGraph ? :" + evalResult.graph().equals(evalResult_parsed.graph()));
+            System.out.println("evalResult.graph == evalResult_parsed.graph ? :" + engine2.rootNode().equals(engine_parsed.rootNode()));
 
             Instant end = Instant.now();
             System.out.println(evalResult);
