@@ -110,6 +110,9 @@ public class CalculationCanvas extends ScrollPane {
     private Consumer<EvaluationBundle> onEditCompleted;
     private Consumer<Set<Path>> onMultipleNodesSelected;
     private Runnable onStructuralChange; // New callback for structural changes
+    private Runnable onResetRequested; // Callback for reset button in edit mode
+    private Runnable onFlywireEditRequested; // Callback for Flywires button in edit mode
+    private Runnable onScopeEditRequested; // Callback for Scope button in edit mode
     
     /**
      * Helper class to store information about a node connection point.
@@ -461,32 +464,18 @@ public class CalculationCanvas extends ScrollPane {
 
         // Fixed canvas position matching renderEditButtons
         double fixedRightEdge = Math.max(getViewportBounds().getWidth(), MIN_CANVAS_WIDTH) - 20;
-        double startX = fixedRightEdge - (buttonWidth * 3 + buttonSpacing * 2);
+        double startX = fixedRightEdge - (buttonWidth * 4 + buttonSpacing * 3);
         double buttonY = margin;
 
-        // Check if click is within any button area
-        double groupButtonX = startX;
-        double ungroupButtonX = startX + buttonWidth + buttonSpacing;
-        double resetButtonX = startX + (buttonWidth + buttonSpacing) * 2;
-        
-        // Group button area
-        if (x >= groupButtonX && x <= groupButtonX + buttonWidth && 
-            y >= buttonY && y <= buttonY + buttonHeight) {
-            return true;
+        // Check if click is within any of the 4 buttons
+        for (int i = 0; i < 4; i++) {
+            double btnX = startX + i * (buttonWidth + buttonSpacing);
+            if (x >= btnX && x <= btnX + buttonWidth &&
+                y >= buttonY && y <= buttonY + buttonHeight) {
+                return true;
+            }
         }
-        
-        // Ungroup button area
-        if (x >= ungroupButtonX && x <= ungroupButtonX + buttonWidth && 
-            y >= buttonY && y <= buttonY + buttonHeight) {
-            return true;
-        }
-        
-        // Reset button area
-        if (x >= resetButtonX && x <= resetButtonX + buttonWidth && 
-            y >= buttonY && y <= buttonY + buttonHeight) {
-            return true;
-        }
-        
+
         return false;
     }
     
@@ -502,43 +491,53 @@ public class CalculationCanvas extends ScrollPane {
 
         // Fixed canvas position matching renderEditButtons
         double fixedRightEdge = Math.max(getViewportBounds().getWidth(), MIN_CANVAS_WIDTH) - 20;
-        double startX = fixedRightEdge - (buttonWidth * 3 + buttonSpacing * 2);
+        double startX = fixedRightEdge - (buttonWidth * 4 + buttonSpacing * 3);
         double buttonY = margin;
 
         double groupButtonX = startX;
         double ungroupButtonX = startX + buttonWidth + buttonSpacing;
-        double resetButtonX = startX + (buttonWidth + buttonSpacing) * 2;
+        double flywireButtonX = startX + (buttonWidth + buttonSpacing) * 2;
+        double scopeButtonX = startX + (buttonWidth + buttonSpacing) * 3;
 
         // Get selection info
         List<NodeViewModel> selectedNodes = nodes.stream().filter(NodeViewModel::isSelected).collect(java.util.stream.Collectors.toList());
         int selectedCount = selectedNodes.size();
         boolean canGroup = selectedCount >= 1;
         boolean canUngroup = selectedCount == 1 && selectedNodes.get(0).isNodeGroup();
-        
+
         // Check Group button click
-        if (x >= groupButtonX && x <= groupButtonX + buttonWidth && 
+        if (x >= groupButtonX && x <= groupButtonX + buttonWidth &&
             y >= buttonY && y <= buttonY + buttonHeight) {
             if (canGroup) {
                 handleGroupNodes(selectedNodes);
-            } else {
             }
             return;
         }
-        
+
         // Check Ungroup button click
-        if (x >= ungroupButtonX && x <= ungroupButtonX + buttonWidth && 
+        if (x >= ungroupButtonX && x <= ungroupButtonX + buttonWidth &&
             y >= buttonY && y <= buttonY + buttonHeight) {
             if (canUngroup) {
                 handleUngroupNode(selectedNodes.get(0));
-            } else {
             }
             return;
         }
-        
-        // Check Reset button click
-        if (x >= resetButtonX && x <= resetButtonX + buttonWidth && 
+
+        // Check Flywires button click
+        if (x >= flywireButtonX && x <= flywireButtonX + buttonWidth &&
             y >= buttonY && y <= buttonY + buttonHeight) {
-            handleResetChanges();
+            if (onFlywireEditRequested != null) {
+                onFlywireEditRequested.run();
+            }
+            return;
+        }
+
+        // Check Scope button click
+        if (x >= scopeButtonX && x <= scopeButtonX + buttonWidth &&
+            y >= buttonY && y <= buttonY + buttonHeight) {
+            if (onScopeEditRequested != null) {
+                onScopeEditRequested.run();
+            }
             return;
         }
     }
@@ -829,20 +828,22 @@ public class CalculationCanvas extends ScrollPane {
         if (window instanceof me.vincentzz.visual.view.EditNodeWindow editWindow) {
             // Clear all selections first
             clearAllNodeSelections();
-            
+
             // Call the EditNodeWindow's reset method to reload original parameters
             editWindow.resetToOriginalState();
-            
+
+            showInfoAlert("Reset Complete", "All changes have been reset to the original state.");
+        } else if (onResetRequested != null) {
+            clearAllNodeSelections();
+            onResetRequested.run();
+            showInfoAlert("Reset Complete", "All changes have been reset to the original state.");
+        } else if (onStructuralChange != null) {
+            // Fallback: use structural change event
+            clearAllNodeSelections();
+            onStructuralChange.run();
             showInfoAlert("Reset Complete", "All changes have been reset to the original state.");
         } else {
-            // Fallback: use structural change event
-            if (onStructuralChange != null) {
-                clearAllNodeSelections();
-                onStructuralChange.run();
-                showInfoAlert("Reset Complete", "All changes have been reset to the original state.");
-            } else {
-                throw new RuntimeException("Cannot reset: no EditNodeWindow or structural change handler available");
-            }
+            throw new RuntimeException("Cannot reset: no EditNodeWindow or reset handler available");
         }
     }
     
@@ -2569,7 +2570,19 @@ public class CalculationCanvas extends ScrollPane {
     public void setOnStructuralChange(Runnable onStructuralChange) {
         this.onStructuralChange = onStructuralChange;
     }
-    
+
+    public void setOnResetRequested(Runnable onResetRequested) {
+        this.onResetRequested = onResetRequested;
+    }
+
+    public void setOnFlywireEditRequested(Runnable onFlywireEditRequested) {
+        this.onFlywireEditRequested = onFlywireEditRequested;
+    }
+
+    public void setOnScopeEditRequested(Runnable onScopeEditRequested) {
+        this.onScopeEditRequested = onScopeEditRequested;
+    }
+
     /**
      * Set edit model for edit mode.
      */
@@ -3437,106 +3450,113 @@ public class CalculationCanvas extends ScrollPane {
 
         // Position buttons at fixed canvas position (top right, matching OUTPUTS X anchor)
         double fixedRightEdge = Math.max(getViewportBounds().getWidth(), MIN_CANVAS_WIDTH) - 20;
-        double startX = fixedRightEdge - (buttonWidth * 3 + buttonSpacing * 2);
+        double startX = fixedRightEdge - (buttonWidth * 4 + buttonSpacing * 3);
         double buttonY = margin;
 
         // Draw Group button
         double groupButtonX = startX;
-        Color groupBgColor = canGroup ? ColorScheme.NODE_BACKGROUND : ColorScheme.BACKGROUND_MEDIUM;
-        Color groupTextColor = canGroup ? ColorScheme.TEXT_PRIMARY : ColorScheme.TEXT_SECONDARY;
-        
-        gc.setFill(groupBgColor);
-        gc.fillRoundRect(groupButtonX, buttonY, buttonWidth, buttonHeight, 5, 5);
-        gc.setStroke(ColorScheme.NODE_BORDER);
-        gc.setLineWidth(1);
-        gc.strokeRoundRect(groupButtonX, buttonY, buttonWidth, buttonHeight, 5, 5);
-        
-        gc.setFont(Font.font("Arial", FontWeight.NORMAL, 11));
-        gc.setFill(groupTextColor);
-        gc.fillText("Group", groupButtonX + 25, buttonY + 20);
-        
+        drawCanvasButton(groupButtonX, buttonY, buttonWidth, buttonHeight, "Group",
+                canGroup ? ColorScheme.NODE_BACKGROUND : ColorScheme.BACKGROUND_MEDIUM,
+                canGroup ? ColorScheme.TEXT_PRIMARY : ColorScheme.TEXT_SECONDARY);
+
         // Draw Ungroup button
         double ungroupButtonX = startX + buttonWidth + buttonSpacing;
-        Color ungroupBgColor = canUngroup ? ColorScheme.NODE_BACKGROUND : ColorScheme.BACKGROUND_MEDIUM;
-        Color ungroupTextColor = canUngroup ? ColorScheme.TEXT_PRIMARY : ColorScheme.TEXT_SECONDARY;
-        
-        gc.setFill(ungroupBgColor);
-        gc.fillRoundRect(ungroupButtonX, buttonY, buttonWidth, buttonHeight, 5, 5);
+        drawCanvasButton(ungroupButtonX, buttonY, buttonWidth, buttonHeight, "Ungroup",
+                canUngroup ? ColorScheme.NODE_BACKGROUND : ColorScheme.BACKGROUND_MEDIUM,
+                canUngroup ? ColorScheme.TEXT_PRIMARY : ColorScheme.TEXT_SECONDARY);
+
+        // Draw Flywires button
+        double flywireButtonX = startX + (buttonWidth + buttonSpacing) * 2;
+        drawCanvasButton(flywireButtonX, buttonY, buttonWidth, buttonHeight, "Flywires",
+                ColorScheme.NODE_BACKGROUND, ColorScheme.TEXT_PRIMARY);
+
+        // Draw Scope button
+        double scopeButtonX = startX + (buttonWidth + buttonSpacing) * 3;
+        drawCanvasButton(scopeButtonX, buttonY, buttonWidth, buttonHeight, "Scope",
+                ColorScheme.NODE_BACKGROUND, ColorScheme.TEXT_PRIMARY);
+    }
+
+    private void drawCanvasButton(double x, double y, double w, double h, String text, Color bgColor, Color textColor) {
+        gc.setFill(bgColor);
+        gc.fillRoundRect(x, y, w, h, 5, 5);
         gc.setStroke(ColorScheme.NODE_BORDER);
         gc.setLineWidth(1);
-        gc.strokeRoundRect(ungroupButtonX, buttonY, buttonWidth, buttonHeight, 5, 5);
-        
+        gc.strokeRoundRect(x, y, w, h, 5, 5);
+
         gc.setFont(Font.font("Arial", FontWeight.NORMAL, 11));
-        gc.setFill(ungroupTextColor);
-        gc.fillText("Ungroup", ungroupButtonX + 20, buttonY + 20);
-        
-        // Draw Reset button
-        double resetButtonX = startX + (buttonWidth + buttonSpacing) * 2;
-        Color resetBgColor = ColorScheme.NODE_BACKGROUND; // Always enabled
-        Color resetTextColor = ColorScheme.TEXT_PRIMARY;
-        
-        gc.setFill(resetBgColor);
-        gc.fillRoundRect(resetButtonX, buttonY, buttonWidth, buttonHeight, 5, 5);
-        gc.setStroke(ColorScheme.NODE_BORDER);
-        gc.setLineWidth(1);
-        gc.strokeRoundRect(resetButtonX, buttonY, buttonWidth, buttonHeight, 5, 5);
-        
-        gc.setFont(Font.font("Arial", FontWeight.NORMAL, 11));
-        gc.setFill(resetTextColor);
-        gc.fillText("Reset", resetButtonX + 25, buttonY + 20);
+        gc.setFill(textColor);
+        double textWidth = text.length() * 6.5; // approximate
+        gc.fillText(text, x + (w - textWidth) / 2, y + 20);
     }
     
     /**
      * Render floating info panel in bottom right corner showing flywire and scope info.
      */
     private void renderFloatingInfoPanel() {
-        if (model == null || currentPath == null) {
+        List<String> flywireInfo;
+        List<String> scopeInfo;
+
+        if (editModel != null && currentPath != null) {
+            // Edit mode: get info from NodeBuilder
+            flywireInfo = getEditModeFlywireInfo();
+            scopeInfo = getEditModeScopeInfo();
+        } else if (model != null && currentPath != null) {
+            // View mode: get info from model
+            flywireInfo = getFlywireInfo();
+            scopeInfo = getScopeInfo();
+
+            // Always show at least basic info
+            if (flywireInfo.isEmpty() && scopeInfo.isEmpty()) {
+                scopeInfo = new ArrayList<>();
+                scopeInfo.add("Path: " + getNodeDisplayName(currentPath));
+
+                boolean isNodeGroup = false;
+                if (model != null) {
+                    NodeViewModel currentPathNode = model.getNodeViewModel(currentPath);
+                    isNodeGroup = currentPathNode != null && currentPathNode.isNodeGroup();
+                }
+                scopeInfo.add("Type: " + (isNodeGroup ? "NodeGroup" : "AtomicNode"));
+            }
+        } else {
             return;
         }
-        
-        // Get flywire and scope information for current path
-        List<String> flywireInfo = getFlywireInfo();
-        List<String> scopeInfo = getScopeInfo();
-        
-        // Always show at least basic info
+
         if (flywireInfo.isEmpty() && scopeInfo.isEmpty()) {
-            scopeInfo = new ArrayList<>();
-            scopeInfo.add("Path: " + getNodeDisplayName(currentPath));
-            
-            // Check if current path is a NodeGroup
-            boolean isNodeGroup = false;
-            if (model != null) {
-                NodeViewModel currentPathNode = model.getNodeViewModel(currentPath);
-                isNodeGroup = currentPathNode != null && currentPathNode.isNodeGroup();
-            }
-            scopeInfo.add("Type: " + (isNodeGroup ? "NodeGroup" : "AtomicNode"));
+            return;
         }
-        
+
         // Calculate panel dimensions
         double maxTextWidth = calculateMaxTextWidth(flywireInfo, scopeInfo);
         double panelWidth = Math.min(maxTextWidth + INFO_PANEL_PADDING * 2, INFO_PANEL_WIDTH);
-        
+
         // Calculate total lines
         int totalLines = 0;
         if (!flywireInfo.isEmpty()) {
-            totalLines += 1 + flywireInfo.size(); // "FLYWIRES:" + lines
+            totalLines += 1 + flywireInfo.size();
         }
         if (!scopeInfo.isEmpty()) {
-            totalLines += 1 + scopeInfo.size(); // "SCOPE:" + lines
+            totalLines += 1 + scopeInfo.size();
         }
         if (!flywireInfo.isEmpty() && !scopeInfo.isEmpty()) {
-            totalLines += 1; // Empty line between sections
+            totalLines += 1;
         }
-        
+
         double panelHeight = Math.min(totalLines * INFO_PANEL_LINE_HEIGHT + INFO_PANEL_PADDING * 2, INFO_PANEL_MAX_HEIGHT);
-        
-        // Position panel at fixed canvas position (top right area, below OUTPUTS label)
+
+        // Position panel
         double fixedRightEdge = Math.max(getViewportBounds().getWidth(), MIN_CANVAS_WIDTH);
         double panelX = fixedRightEdge - panelWidth - INFO_PANEL_MARGIN;
-        // Place below the OUTPUTS section: OUTPUTS starts at startY=100, with ySpacing=40 per item
-        List<ResourceIdentifier> pathOutputs = getPathOutputs().stream().distinct().toList();
-        double outputsSectionBottom = 100 + pathOutputs.size() * 40 + 20;
-        double panelY = Math.max(outputsSectionBottom, 100);
+        double panelY;
+        if (editModel != null) {
+            // Edit mode: bottom-right of canvas
+            double canvasHeight = Math.max(getViewportBounds().getHeight(), MIN_CANVAS_HEIGHT);
+            panelY = canvasHeight - panelHeight - INFO_PANEL_MARGIN;
+        } else {
+            // View mode: below OUTPUTS section
+            List<ResourceIdentifier> pathOutputs = getPathOutputs().stream().distinct().toList();
+            double outputsSectionBottom = 100 + pathOutputs.size() * 40 + 20;
+            panelY = Math.max(outputsSectionBottom, 100);
+        }
         
         // Draw panel background
         gc.setFill(ColorScheme.BACKGROUND_MEDIUM.deriveColor(0, 0, 0, 0.9)); // Semi-transparent
@@ -3798,7 +3818,61 @@ public class CalculationCanvas extends ScrollPane {
         
         return scopeInfo;
     }
-    
+
+    private List<String> getEditModeFlywireInfo() {
+        List<String> info = new ArrayList<>();
+        if (editModel == null) return info;
+
+        var builder = editModel.getCurrentNodeBuilder();
+        if (builder instanceof me.vincentzz.graph.node.builder.NodeGroupBuilder ngb) {
+            for (var flywire : ngb.flywires()) {
+                info.add(PathUtils.toUnixString(flywire.source().nodePath()) + ":" +
+                         getShortResourceName(flywire.source().rid()) +
+                         " -> " +
+                         PathUtils.toUnixString(flywire.target().nodePath()) + ":" +
+                         getShortResourceName(flywire.target().rid()));
+            }
+        }
+        return info;
+    }
+
+    private List<String> getEditModeScopeInfo() {
+        List<String> info = new ArrayList<>();
+        if (editModel == null) return info;
+
+        var builder = editModel.getCurrentNodeBuilder();
+        if (builder instanceof me.vincentzz.graph.node.builder.NodeGroupBuilder ngb) {
+            var scope = ngb.getExports();
+            if (scope instanceof me.vincentzz.graph.scope.Include<?> inc) {
+                info.add("Mode: Include");
+                var scopeSet = inc.scopeSet();
+                if (scopeSet instanceof me.vincentzz.graph.scope.RegExMatch<?> rem) {
+                    info.add("Type: RegExMatch");
+                    for (var entry : rem.fieldMatcher().entrySet()) {
+                        info.add("  " + entry.getKey() + ": " + entry.getValue());
+                    }
+                } else if (scopeSet instanceof me.vincentzz.graph.scope.FullSet<?> fs) {
+                    info.add("Entries: " + fs.elements().size());
+                }
+            } else if (scope instanceof me.vincentzz.graph.scope.Exclude<?> exc) {
+                info.add("Mode: Exclude");
+                var scopeSet = exc.scopeSet();
+                if (scopeSet instanceof me.vincentzz.graph.scope.RegExMatch<?> rem) {
+                    info.add("Type: RegExMatch");
+                    for (var entry : rem.fieldMatcher().entrySet()) {
+                        info.add("  " + entry.getKey() + ": " + entry.getValue());
+                    }
+                } else if (scopeSet instanceof me.vincentzz.graph.scope.FullSet<?> fs) {
+                    info.add("Entries: " + fs.elements().size());
+                    if (fs.elements().isEmpty()) {
+                        info.add("  (All outputs exported)");
+                    }
+                }
+            }
+        }
+        return info;
+    }
+
     /**
      * Get path output value for display in tooltips.
      * Uses detailed OutputResult context to show comprehensive output information.

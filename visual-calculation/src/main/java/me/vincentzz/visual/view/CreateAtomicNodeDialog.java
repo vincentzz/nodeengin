@@ -160,6 +160,15 @@ public class CreateAtomicNodeDialog extends Dialog<Map<String, String>> {
         );
     }
     
+    public void prefillParameters(Map<String, Object> values) {
+        for (var entry : values.entrySet()) {
+            TextField field = parameterFields.get(entry.getKey());
+            if (field != null && entry.getValue() != null) {
+                field.setText(entry.getValue().toString());
+            }
+        }
+    }
+
     private String toHexString(javafx.scene.paint.Color color) {
         return String.format("#%02X%02X%02X",
             (int) (color.getRed() * 255),

@@ -12,6 +12,7 @@
         <module>graph-computation-core</module>
         <module>falcon-calculation-kit</module>
         <module>visual-calculation</module>
+        <module>visual-calculation-new</module>
     </modules>
 
     <properties>

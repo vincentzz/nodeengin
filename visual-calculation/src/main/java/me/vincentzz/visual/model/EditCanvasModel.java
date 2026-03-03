@@ -112,6 +112,9 @@ public class EditCanvasModel {
     public List<me.vincentzz.graph.model.ResourceIdentifier> getPathInputs() {
         try {
             CalculationNode currentNode = currentNodeBuilder.toNode();
+            if (!visibleNodeNames.isEmpty() && currentNode instanceof NodeGroup ng) {
+                return getFilteredInputs(ng);
+            }
             return new ArrayList<>(currentNode.inputs());
         } catch (Exception e) {
             return new ArrayList<>();
@@ -124,10 +127,37 @@ public class EditCanvasModel {
     public List<me.vincentzz.graph.model.ResourceIdentifier> getPathOutputs() {
         try {
             CalculationNode currentNode = currentNodeBuilder.toNode();
+            if (!visibleNodeNames.isEmpty() && currentNode instanceof NodeGroup ng) {
+                return getFilteredOutputs(ng);
+            }
             return new ArrayList<>(currentNode.outputs());
         } catch (Exception e) {
             return new ArrayList<>();
         }
+    }
+
+    private List<me.vincentzz.graph.model.ResourceIdentifier> getFilteredInputs(NodeGroup ng) {
+        Set<me.vincentzz.graph.model.ResourceIdentifier> visibleOutputs = ng.nodes().stream()
+                .filter(n -> visibleNodeNames.contains(n.name()))
+                .flatMap(n -> n.outputs().stream())
+                .collect(Collectors.toSet());
+
+        return ng.nodes().stream()
+                .filter(n -> visibleNodeNames.contains(n.name()))
+                .flatMap(n -> n.inputs().stream())
+                .distinct()
+                .filter(rid -> !visibleOutputs.contains(rid))
+                .collect(Collectors.toList());
+    }
+
+    private List<me.vincentzz.graph.model.ResourceIdentifier> getFilteredOutputs(NodeGroup ng) {
+        return ng.nodes().stream()
+                .filter(n -> visibleNodeNames.contains(n.name()))
+                .flatMap(n -> n.outputs().stream()
+                        .filter(o -> ng.exports().isInScope(
+                                new me.vincentzz.graph.node.ConnectionPoint(Path.of(n.name()), o))))
+                .distinct()
+                .collect(Collectors.toList());
     }
 
     /**

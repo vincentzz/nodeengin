@@ -1,8 +1,11 @@
 package me.vincentzz.visual.view;
 
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
+import javafx.scene.paint.Color;
+import javafx.scene.shape.Circle;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import me.vincentzz.graph.model.AdhocOverride;
@@ -19,115 +22,83 @@ import java.util.Map;
 
 /**
  * Bottom panel that displays original request details and final result values from EvaluationResult.
+ * Uses structured UI with TreeViews and styled rows instead of raw text.
  */
 public class InfoDisplayPane extends VBox {
-    
+
     private static final double PREFERRED_HEIGHT = 120.0;
-    private static final int MAX_DISPLAY_ITEMS = 20; // Limit displayed items to avoid UI clutter
-    
+
     private EvaluationResult evaluationResult;
-    
+
     // UI Components
-    private Label requestPathLabel;
-    private TextArea adhocOverrideArea;
-    private TextArea finalResultsArea;
-    
+    private VBox requestContent;
+    private VBox resultContent;
+
     public InfoDisplayPane() {
         initializeComponents();
         setupLayout();
         styleComponents();
     }
-    
+
     private void initializeComponents() {
-        // Request path section
-        requestPathLabel = new Label("No request loaded");
-        
-        // Adhoc overrides section
-        adhocOverrideArea = new TextArea();
-        adhocOverrideArea.setEditable(false);
-        adhocOverrideArea.setWrapText(true);
-        // Remove setPrefRowCount to allow full expansion
-        
-        // Final results section
-        finalResultsArea = new TextArea();
-        finalResultsArea.setEditable(false);
-        finalResultsArea.setWrapText(true);
-        // Remove setPrefRowCount to allow full expansion
+        requestContent = new VBox(4);
+        requestContent.setPadding(new Insets(4));
+
+        resultContent = new VBox(4);
+        resultContent.setPadding(new Insets(4));
     }
-    
+
     private void setupLayout() {
         setPrefHeight(PREFERRED_HEIGHT);
-        // Remove setMaxHeight to allow vertical resizing
         setPadding(new Insets(3));
         setSpacing(3);
-        
-        // Create split pane for adhoc overrides and final results
+
         SplitPane splitPane = new SplitPane();
         splitPane.setOrientation(javafx.geometry.Orientation.HORIZONTAL);
-        
+
         // Left side: Request
-        VBox adhocSection = new VBox(2);
-        adhocSection.setStyle("-fx-background-color: " + toHexString(ColorScheme.NAV_BACKGROUND) + ";");
-        Label adhocLabel = new Label("Request");
-        adhocLabel.setFont(Font.font("System", 10));
-        adhocLabel.getStyleClass().add("title"); // Use CSS class for cyan color and bold styling
-        adhocSection.getChildren().addAll(adhocLabel, adhocOverrideArea);
-        VBox.setVgrow(adhocOverrideArea, Priority.ALWAYS);
-        // Set the section to grow within the SplitPane
-        HBox.setHgrow(adhocSection, Priority.ALWAYS);
-        
+        VBox requestSection = new VBox(2);
+        requestSection.setStyle("-fx-background-color: " + toHexString(ColorScheme.NAV_BACKGROUND) + ";");
+        Label requestLabel = new Label("Request");
+        requestLabel.setFont(Font.font("System", 10));
+        requestLabel.getStyleClass().add("title");
+
+        ScrollPane requestScroll = new ScrollPane(requestContent);
+        requestScroll.setFitToWidth(true);
+        requestScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        styleScrollPane(requestScroll);
+
+        requestSection.getChildren().addAll(requestLabel, requestScroll);
+        VBox.setVgrow(requestScroll, Priority.ALWAYS);
+
         // Right side: Result
-        VBox resultsSection = new VBox(2);
-        resultsSection.setStyle("-fx-background-color: " + toHexString(ColorScheme.NAV_BACKGROUND) + ";");
-        Label resultsLabel = new Label("Result");
-        resultsLabel.setFont(Font.font("System", 10));
-        resultsLabel.getStyleClass().add("title"); // Use CSS class for cyan color and bold styling
-        resultsSection.getChildren().addAll(resultsLabel, finalResultsArea);
-        VBox.setVgrow(finalResultsArea, Priority.ALWAYS);
-        // Set the section to grow within the SplitPane
-        HBox.setHgrow(resultsSection, Priority.ALWAYS);
-        
-        splitPane.getItems().addAll(adhocSection, resultsSection);
+        VBox resultSection = new VBox(2);
+        resultSection.setStyle("-fx-background-color: " + toHexString(ColorScheme.NAV_BACKGROUND) + ";");
+        Label resultLabel = new Label("Result");
+        resultLabel.setFont(Font.font("System", 10));
+        resultLabel.getStyleClass().add("title");
+
+        ScrollPane resultScroll = new ScrollPane(resultContent);
+        resultScroll.setFitToWidth(true);
+        resultScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        styleScrollPane(resultScroll);
+
+        resultSection.getChildren().addAll(resultLabel, resultScroll);
+        VBox.setVgrow(resultScroll, Priority.ALWAYS);
+
+        splitPane.getItems().addAll(requestSection, resultSection);
         splitPane.setDividerPositions(0.5);
-        
-        // Add split pane directly (no separate request path section)
+
         getChildren().add(splitPane);
-        
-        // Ensure the split pane fills the parent completely
         VBox.setVgrow(splitPane, Priority.ALWAYS);
-        HBox.setHgrow(splitPane, Priority.ALWAYS);
     }
-    
-    private VBox createRequestPathSection() {
-        VBox section = new VBox(5);
-        Label pathLabel = new Label("Requested Node Path:");
-        pathLabel.setFont(Font.font("System", FontWeight.BOLD, 12));
-        section.getChildren().addAll(pathLabel, requestPathLabel);
-        return section;
-    }
-    
+
     private void styleComponents() {
-        // Apply dark theme styling
         setStyle("-fx-background-color: " + toHexString(ColorScheme.NAV_BACKGROUND) + ";");
-        
-        requestPathLabel.setTextFill(ColorScheme.TEXT_PRIMARY);
-        requestPathLabel.setFont(Font.font("System", 11));
-        
-        styleTextArea(adhocOverrideArea);
-        styleTextArea(finalResultsArea);
+        requestContent.setStyle("-fx-background-color: " + toHexString(ColorScheme.BACKGROUND_DARK) + ";");
+        resultContent.setStyle("-fx-background-color: " + toHexString(ColorScheme.BACKGROUND_DARK) + ";");
     }
-    
-    private void styleTextArea(TextArea textArea) {
-        textArea.setStyle(
-            "-fx-control-inner-background: " + toHexString(ColorScheme.BACKGROUND_DARK) + ";" +
-            "-fx-text-fill: " + toHexString(ColorScheme.TEXT_PRIMARY) + ";" +
-            "-fx-border-color: " + toHexString(ColorScheme.NODE_BORDER) + ";" +
-            "-fx-border-width: 1px;" +
-            "-fx-font-family: 'Courier New', monospace;" +
-            "-fx-font-size: 10px;"
-        );
-    }
-    
+
     /**
      * Update the display with new EvaluationResult data.
      */
@@ -135,238 +106,382 @@ public class InfoDisplayPane extends VBox {
         this.evaluationResult = evaluationResult;
         updateDisplay();
     }
-    
+
     private void updateDisplay() {
+        requestContent.getChildren().clear();
+        resultContent.getChildren().clear();
+
         if (evaluationResult == null) {
-            requestPathLabel.setText("No request loaded");
-            adhocOverrideArea.setText("No adhoc overrides");
-            finalResultsArea.setText("No results");
+            requestContent.getChildren().add(createMutedLabel("No request loaded"));
+            resultContent.getChildren().add(createMutedLabel("No results"));
             return;
         }
-        
-        updateRequestPath();
-        updateAdhocOverrides();
-        updateFinalResults();
+
+        buildRequestPanel();
+        buildResultPanel();
     }
-    
-    private void updateRequestPath() {
-        Path requestedPath = evaluationResult.request().path();
-        requestPathLabel.setText(requestedPath != null ? PathUtils.toUnixString(requestedPath) : "Unknown");
+
+    // ===== Request Panel =====
+
+    private void buildRequestPanel() {
+        var request = evaluationResult.request();
+
+        // Requested Node Path
+        requestContent.getChildren().add(createSectionHeader("Requested Node Path"));
+        Path requestedPath = request.path();
+        HBox pathRow = createKeyValueRow("Path",
+                requestedPath != null ? PathUtils.toUnixString(requestedPath) : "Unknown");
+        requestContent.getChildren().add(pathRow);
+
+        // Requested Resource IDs
+        requestContent.getChildren().add(createSeparator());
+        requestContent.getChildren().add(createSectionHeader(
+                "Requested Resources (" + evaluationResult.results().size() + ")"));
+
+        for (ResourceIdentifier rid : evaluationResult.results().keySet()) {
+            requestContent.getChildren().add(createResourceIdRow(rid));
+        }
+
+        // Adhoc Override
+        requestContent.getChildren().add(createSeparator());
+        if (request.override().isEmpty()) {
+            requestContent.getChildren().add(createSectionHeader("Adhoc Override"));
+            requestContent.getChildren().add(createMutedLabel("  (none)"));
+        } else {
+            AdhocOverride override = request.override().get();
+            buildAdhocSection(override);
+        }
     }
-    
-    private void updateAdhocOverrides() {
-        StringBuilder sb = new StringBuilder();
-        
-        // Add requested node path at the top of the left pane
-        Path requestedPath = evaluationResult.request().path();
-        sb.append("Requested Node Path: ").append(requestedPath != null ? PathUtils.toUnixString(requestedPath) : "Unknown").append("\n\n");
-        
-        // Add requested resource IDs section
-        sb.append("Requested Resource IDs:\n");
+
+    private void buildAdhocSection(AdhocOverride override) {
+        // Adhoc Inputs
+        requestContent.getChildren().add(createSectionHeader(
+                "Adhoc Inputs (" + override.adhocInputs().size() + ")"));
+        if (override.adhocInputs().isEmpty()) {
+            requestContent.getChildren().add(createMutedLabel("  (empty)"));
+        } else {
+            for (var entry : override.adhocInputs().entrySet()) {
+                requestContent.getChildren().add(
+                        createConnectionPointResultRow(entry.getKey(), entry.getValue()));
+            }
+        }
+
+        // Adhoc Outputs
+        requestContent.getChildren().add(createSectionHeader(
+                "Adhoc Outputs (" + override.adhocOutputs().size() + ")"));
+        if (override.adhocOutputs().isEmpty()) {
+            requestContent.getChildren().add(createMutedLabel("  (empty)"));
+        } else {
+            for (var entry : override.adhocOutputs().entrySet()) {
+                requestContent.getChildren().add(
+                        createConnectionPointResultRow(entry.getKey(), entry.getValue()));
+            }
+        }
+
+        // Adhoc Flywires
+        requestContent.getChildren().add(createSectionHeader(
+                "Adhoc Flywires (" + override.adhocFlywires().size() + ")"));
+        if (override.adhocFlywires().isEmpty()) {
+            requestContent.getChildren().add(createMutedLabel("  (empty)"));
+        } else {
+            for (Flywire fw : override.adhocFlywires()) {
+                requestContent.getChildren().add(createFlywireRow(fw));
+            }
+        }
+    }
+
+    // ===== Result Panel =====
+
+    private void buildResultPanel() {
         if (evaluationResult.results().isEmpty()) {
-            sb.append("  (empty)\n\n");
-        } else {
-            int count = 0;
-            for (Map.Entry<ResourceIdentifier, Result<Object>> entry : evaluationResult.results().entrySet()) {
-                if (count >= MAX_DISPLAY_ITEMS) {
-                    sb.append("... and ").append(evaluationResult.results().size() - MAX_DISPLAY_ITEMS).append(" more\n");
-                    break;
-                }
-                sb.append("  ").append(formatResourceIdentifierFull(entry.getKey())).append("\n");
-                count++;
-            }
-            sb.append("\n");
+            resultContent.getChildren().add(createMutedLabel("No final results"));
+            return;
         }
-        
-        if (evaluationResult.request().override().isEmpty()) {
-            sb.append("Adhoc Inputs:\n  (empty)\n\n");
-            sb.append("Adhoc Outputs:\n  (empty)\n\n");
-            sb.append("Adhoc Flywires:\n  (empty)");
-        } else {
-            AdhocOverride override = evaluationResult.request().override().get();
-            
-            // Adhoc Inputs - always show section
-            sb.append("Adhoc Inputs:\n");
-            if (override.adhocInputs().isEmpty()) {
-                sb.append("  (empty)\n\n");
-            } else {
-                int count = 0;
-                for (Map.Entry<ConnectionPoint, Result<Object>> entry : override.adhocInputs().entrySet()) {
-                    if (count >= MAX_DISPLAY_ITEMS) {
-                        sb.append("... and ").append(override.adhocInputs().size() - MAX_DISPLAY_ITEMS).append(" more\n");
-                        break;
-                    }
-                    sb.append("  ").append(formatConnectionPoint(entry.getKey()))
-                      .append("\n    Value: ").append(formatResult(entry.getValue())).append("\n\n");
-                    count++;
-                }
-            }
-            
-            // Adhoc Outputs - always show section
-            sb.append("Adhoc Outputs:\n");
-            if (override.adhocOutputs().isEmpty()) {
-                sb.append("  (empty)\n\n");
-            } else {
-                int count = 0;
-                for (Map.Entry<ConnectionPoint, Result<Object>> entry : override.adhocOutputs().entrySet()) {
-                    if (count >= MAX_DISPLAY_ITEMS) {
-                        sb.append("... and ").append(override.adhocOutputs().size() - MAX_DISPLAY_ITEMS).append(" more\n");
-                        break;
-                    }
-                    sb.append("  ").append(formatConnectionPoint(entry.getKey()))
-                      .append("\n    Value: ").append(formatResult(entry.getValue())).append("\n\n");
-                    count++;
-                }
-            }
-            
-            // Adhoc Flywires - always show section
-            sb.append("Adhoc Flywires:\n");
-            if (override.adhocFlywires().isEmpty()) {
-                sb.append("  (empty)");
-            } else {
-                int count = 0;
-                for (Flywire flywire : override.adhocFlywires()) {
-                    if (count >= MAX_DISPLAY_ITEMS) {
-                        sb.append("... and ").append(override.adhocFlywires().size() - MAX_DISPLAY_ITEMS).append(" more\n");
-                        break;
-                    }
-                    // Properly indent all lines of flywire output
-                    String flywireText = formatFlywire(flywire);
-                    String[] lines = flywireText.split("\n");
-                    for (String line : lines) {
-                        sb.append("  ").append(line).append("\n");
-                    }
-                    sb.append("\n");
-                    count++;
-                }
-            }
+
+        resultContent.getChildren().add(createSectionHeader(
+                "Final Results (" + evaluationResult.results().size() + ")"));
+
+        for (var entry : evaluationResult.results().entrySet()) {
+            resultContent.getChildren().add(
+                    createResultRow(entry.getKey(), entry.getValue()));
         }
-        
-        adhocOverrideArea.setText(sb.toString());
     }
-    
-    private void updateFinalResults() {
-        StringBuilder sb = new StringBuilder();
-        
-        if (evaluationResult.results().isEmpty()) {
-            sb.append("No final results");
+
+    // ===== UI Component Builders =====
+
+    private Label createSectionHeader(String text) {
+        Label label = new Label(text);
+        label.setFont(Font.font("System", FontWeight.BOLD, 11));
+        label.setTextFill(Color.web("#66CCFF"));
+        label.setPadding(new Insets(4, 0, 2, 0));
+        return label;
+    }
+
+    private Label createMutedLabel(String text) {
+        Label label = new Label(text);
+        label.setFont(Font.font("System", 10));
+        label.setTextFill(ColorScheme.TEXT_MUTED);
+        return label;
+    }
+
+    private HBox createKeyValueRow(String key, String value) {
+        HBox row = new HBox(6);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.setPadding(new Insets(1, 4, 1, 8));
+
+        Label keyLabel = new Label(key + ":");
+        keyLabel.setFont(Font.font("System", FontWeight.BOLD, 10));
+        keyLabel.setTextFill(ColorScheme.TEXT_SECONDARY);
+        keyLabel.setMinWidth(Region.USE_PREF_SIZE);
+
+        Label valueLabel = new Label(value);
+        valueLabel.setFont(Font.font("Courier New", 10));
+        valueLabel.setTextFill(ColorScheme.TEXT_PRIMARY);
+        valueLabel.setWrapText(true);
+
+        row.getChildren().addAll(keyLabel, valueLabel);
+        return row;
+    }
+
+    private HBox createResourceIdRow(ResourceIdentifier rid) {
+        HBox row = new HBox(6);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.setPadding(new Insets(1, 4, 1, 8));
+
+        Circle dot = new Circle(3, getResourceColor(rid));
+        Label label = new Label(formatResourceId(rid));
+        label.setFont(Font.font("Courier New", 10));
+        label.setTextFill(ColorScheme.TEXT_PRIMARY);
+
+        row.getChildren().addAll(dot, label);
+        return row;
+    }
+
+    private VBox createResultRow(ResourceIdentifier rid, Result<Object> result) {
+        VBox card = new VBox(2);
+        card.setPadding(new Insets(4, 6, 4, 6));
+        card.setStyle("-fx-background-color: " + toHexString(ColorScheme.BACKGROUND_MEDIUM) + ";" +
+                "-fx-background-radius: 3;");
+
+        // Top row: colored dot + resource ID + status badge
+        HBox topRow = new HBox(6);
+        topRow.setAlignment(Pos.CENTER_LEFT);
+
+        Circle dot = new Circle(4, getResourceColor(rid));
+
+        Label ridLabel = new Label(formatResourceId(rid));
+        ridLabel.setFont(Font.font("System", FontWeight.BOLD, 10));
+        ridLabel.setTextFill(ColorScheme.TEXT_PRIMARY);
+        HBox.setHgrow(ridLabel, Priority.ALWAYS);
+
+        Label badge = createStatusBadge(result);
+
+        topRow.getChildren().addAll(dot, ridLabel, badge);
+
+        // Bottom row: value
+        Label valueLabel = new Label(formatResultValue(result));
+        valueLabel.setFont(Font.font("Courier New", 10));
+        valueLabel.setTextFill(result.isSuccess() ? ColorScheme.TEXT_SECONDARY : Color.web("#FF6666"));
+        valueLabel.setWrapText(true);
+        valueLabel.setPadding(new Insets(0, 0, 0, 14));
+
+        card.getChildren().addAll(topRow, valueLabel);
+        return card;
+    }
+
+    private VBox createConnectionPointResultRow(ConnectionPoint cp, Result<Object> result) {
+        VBox card = new VBox(2);
+        card.setPadding(new Insets(3, 6, 3, 8));
+        card.setStyle("-fx-background-color: " + toHexString(ColorScheme.BACKGROUND_MEDIUM) + ";" +
+                "-fx-background-radius: 3;");
+
+        // Connection point info
+        HBox cpRow = new HBox(6);
+        cpRow.setAlignment(Pos.CENTER_LEFT);
+
+        Circle dot = new Circle(3, getResourceColor(cp.rid()));
+
+        Label pathLabel = new Label(PathUtils.toUnixString(cp.nodePath()));
+        pathLabel.setFont(Font.font("Courier New", FontWeight.BOLD, 10));
+        pathLabel.setTextFill(ColorScheme.TEXT_PRIMARY);
+
+        cpRow.getChildren().addAll(dot, pathLabel);
+
+        // Resource ID
+        Label ridLabel = new Label(formatResourceId(cp.rid()));
+        ridLabel.setFont(Font.font("Courier New", 10));
+        ridLabel.setTextFill(ColorScheme.TEXT_SECONDARY);
+        ridLabel.setPadding(new Insets(0, 0, 0, 12));
+
+        // Value
+        HBox valueRow = new HBox(4);
+        valueRow.setAlignment(Pos.CENTER_LEFT);
+        valueRow.setPadding(new Insets(0, 0, 0, 12));
+
+        Label badge = createStatusBadge(result);
+        Label valueLabel = new Label(formatResultValue(result));
+        valueLabel.setFont(Font.font("Courier New", 10));
+        valueLabel.setTextFill(result.isSuccess() ? ColorScheme.TEXT_SECONDARY : Color.web("#FF6666"));
+        valueLabel.setWrapText(true);
+
+        valueRow.getChildren().addAll(badge, valueLabel);
+
+        card.getChildren().addAll(cpRow, ridLabel, valueRow);
+        return card;
+    }
+
+    private VBox createFlywireRow(Flywire fw) {
+        VBox card = new VBox(2);
+        card.setPadding(new Insets(3, 6, 3, 8));
+        card.setStyle("-fx-background-color: " + toHexString(ColorScheme.BACKGROUND_MEDIUM) + ";" +
+                "-fx-background-radius: 3;");
+
+        // Source connection point
+        HBox sourceRow = new HBox(4);
+        sourceRow.setAlignment(Pos.CENTER_LEFT);
+        Label srcHeader = new Label("src:");
+        srcHeader.setFont(Font.font("System", FontWeight.BOLD, 10));
+        srcHeader.setTextFill(Color.web("#66CCFF"));
+        srcHeader.setMinWidth(24);
+        Circle srcDot = new Circle(3, getResourceColor(fw.source().rid()));
+        Label srcLabel = new Label(PathUtils.toUnixString(fw.source().nodePath())
+                + " : " + formatResourceId(fw.source().rid()));
+        srcLabel.setFont(Font.font("Courier New", 10));
+        srcLabel.setTextFill(ColorScheme.TEXT_PRIMARY);
+        srcLabel.setWrapText(true);
+        sourceRow.getChildren().addAll(srcHeader, srcDot, srcLabel);
+
+        // Arrow
+        Label arrow = new Label("       \u2192");
+        arrow.setFont(Font.font("System", FontWeight.BOLD, 10));
+        arrow.setTextFill(Color.web("#66CCFF"));
+
+        // Target connection point
+        HBox targetRow = new HBox(4);
+        targetRow.setAlignment(Pos.CENTER_LEFT);
+        Label tgtHeader = new Label("tgt:");
+        tgtHeader.setFont(Font.font("System", FontWeight.BOLD, 10));
+        tgtHeader.setTextFill(Color.web("#66CCFF"));
+        tgtHeader.setMinWidth(24);
+        Circle tgtDot = new Circle(3, getResourceColor(fw.target().rid()));
+        Label tgtLabel = new Label(PathUtils.toUnixString(fw.target().nodePath())
+                + " : " + formatResourceId(fw.target().rid()));
+        tgtLabel.setFont(Font.font("Courier New", 10));
+        tgtLabel.setTextFill(ColorScheme.TEXT_PRIMARY);
+        tgtLabel.setWrapText(true);
+        targetRow.getChildren().addAll(tgtHeader, tgtDot, tgtLabel);
+
+        card.getChildren().addAll(sourceRow, arrow, targetRow);
+        return card;
+    }
+
+    private Label createStatusBadge(Result<Object> result) {
+        Label badge = new Label();
+        badge.setFont(Font.font("System", FontWeight.BOLD, 9));
+        badge.setPadding(new Insets(0, 4, 0, 4));
+        badge.setMinWidth(Region.USE_PREF_SIZE);
+
+        if (result.isSuccess()) {
+            badge.setText("OK");
+            badge.setTextFill(Color.web("#1A1A1A"));
+            badge.setStyle("-fx-background-color: #44CC44; -fx-background-radius: 3;");
         } else {
-            sb.append("Final Results (").append(evaluationResult.results().size()).append(" items):\n\n");
-            
-            int count = 0;
-            for (Map.Entry<ResourceIdentifier, Result<Object>> entry : evaluationResult.results().entrySet()) {
-                if (count >= MAX_DISPLAY_ITEMS) {
-                    sb.append("... and ").append(evaluationResult.results().size() - MAX_DISPLAY_ITEMS).append(" more items\n");
-                    break;
-                }
-                
-                sb.append(formatResourceIdentifierFull(entry.getKey()))
-                  .append(":\n  ")
-                  .append(formatResult(entry.getValue()))
-                  .append("\n\n");
-                count++;
-            }
+            badge.setText("ERR");
+            badge.setTextFill(Color.web("#FFFFFF"));
+            badge.setStyle("-fx-background-color: #CC4444; -fx-background-radius: 3;");
         }
-        
-        finalResultsArea.setText(sb.toString());
+        return badge;
     }
-    
-    private String formatConnectionPoint(ConnectionPoint cp) {
-        return String.format("NodePath: %s\n    ResourceId: %s", 
-            cp.nodePath(),
-            formatResourceIdentifierFull(cp.rid()));
+
+    private Region createSeparator() {
+        Region sep = new Region();
+        sep.setPrefHeight(1);
+        sep.setMaxHeight(1);
+        sep.setStyle("-fx-background-color: " + toHexString(ColorScheme.NODE_BORDER) + ";");
+        VBox.setMargin(sep, new Insets(2, 0, 2, 0));
+        return sep;
     }
-    
-    private String formatFlywire(Flywire flywire) {
-        // Create aligned multiline display for source and target
-        StringBuilder sb = new StringBuilder();
-        
-        // Format source - ensure consistent 9-character width for label
-        sb.append("Source:  ").append(formatConnectionPointInline(flywire.source())).append("\n");
-        sb.append("         ").append(formatResourceIdentifierFull(flywire.source().rid())).append("\n");
-        
-        // Format target - ensure consistent 9-character width for label  
-        sb.append("Target:  ").append(formatConnectionPointInline(flywire.target())).append("\n");
-        sb.append("         ").append(formatResourceIdentifierFull(flywire.target().rid()));
-        
-        return sb.toString();
-    }
-    
-    private String formatConnectionPointInline(ConnectionPoint cp) {
-        // Format connection point on a single line for flywire display
-        return PathUtils.toUnixString(cp.nodePath());
-    }
-    
-    private String formatResourceIdentifier(ResourceIdentifier rid) {
-        // Try to extract meaningful information from the resource identifier
+
+    // ===== Formatting Helpers =====
+
+    private String formatResourceId(ResourceIdentifier rid) {
         String ridStr = rid.toString();
-        
-        // Look for common patterns and simplify display
-        if (ridStr.contains("FalconRawTopic")) {
-            // Extract symbol, source, attribute from FalconRawTopic
-            String simplified = ridStr
-                .replaceAll(".*symbol=([^,\\]]+).*", "$1")
-                .replaceAll(".*source=([^,\\]]+).*", "$1")
-                .replaceAll(".*attribute=([^,\\]]+).*", "$1");
-            
-            if (!simplified.equals(ridStr)) {
-                return simplified;
-            }
-        }
-        
-        return ridStr.length() > 60 ? ridStr.substring(0, 57) + "..." : ridStr;
-    }
-    
-    private String formatResourceIdentifierFull(ResourceIdentifier rid) {
-        // Return full ResourceIdentifier information without truncation
-        String ridStr = rid.toString();
-        
-        // Parse FalconRawTopic for detailed display
+
         if (ridStr.contains("FalconRawTopic")) {
             try {
-                // Extract structured information
-                String symbol = ridStr.replaceAll(".*symbol=([^,\\]]+).*", "$1");
-                String source = ridStr.replaceAll(".*source=([^,\\]]+).*", "$1");
+                String symbol = ridStr.replaceAll(".*symbol='?([^',\\]]+)'?.*", "$1");
+                String source = ridStr.replaceAll(".*source='?([^',\\]]+)'?.*", "$1");
                 String attribute = ridStr.replaceAll(".*attribute=([^,\\]]+).*", "$1");
-                
-                // Clean up attribute class name
+
                 if (attribute.startsWith("class ")) {
-                    attribute = attribute.substring(6); // Remove "class " prefix
-                    // Extract just the class name (after last dot)
+                    attribute = attribute.substring(6);
                     int lastDot = attribute.lastIndexOf('.');
                     if (lastDot >= 0) {
                         attribute = attribute.substring(lastDot + 1);
                     }
                 }
-                
-                return String.format("FalconRawTopic[symbol=%s, source=%s, attribute=%s]", symbol, source, attribute);
+
+                return symbol + " / " + source + " / " + attribute;
             } catch (Exception e) {
-                // Fall back to original string if parsing fails
                 return ridStr;
             }
         }
-        
+
         return ridStr;
     }
-    
-    private String formatResult(Result<Object> result) {
-        if (result == null) {
-            return "null";
-        }
-        
+
+    private String formatResultValue(Result<Object> result) {
+        if (result == null) return "null";
+
         if (result.isSuccess()) {
             Object data = result.get();
-            if (data == null) {
-                return "null";
-            }
-            String dataStr = data.toString();
-            return dataStr.length() > 100 ? dataStr.substring(0, 97) + "..." : dataStr;
+            return toJsonString(data);
         } else {
             Exception ex = result.getException();
-            return "Error: " + (ex != null ? ex.getMessage() : "Unknown error");
+            return ex != null ? ex.getMessage() : "Unknown error";
         }
     }
-    
+
+    private String toJsonString(Object value) {
+        if (value == null) return "null";
+        if (value instanceof String s) return "\"" + s + "\"";
+        if (value instanceof Number || value instanceof Boolean) return value.toString();
+        if (value.getClass().isRecord()) {
+            StringBuilder sb = new StringBuilder("{ ");
+            var components = value.getClass().getRecordComponents();
+            for (int i = 0; i < components.length; i++) {
+                try {
+                    var accessor = components[i].getAccessor();
+                    accessor.setAccessible(true);
+                    Object fieldValue = accessor.invoke(value);
+                    sb.append("\"").append(components[i].getName()).append("\": ");
+                    sb.append(toJsonString(fieldValue));
+                    if (i < components.length - 1) sb.append(", ");
+                } catch (Exception e) {
+                    sb.append("\"").append(components[i].getName()).append("\": \"error\"");
+                }
+            }
+            sb.append(" }");
+            return sb.toString();
+        }
+        if (value instanceof java.time.Instant instant) return "\"" + instant + "\"";
+        if (value instanceof java.math.BigDecimal bd) return bd.toPlainString();
+        if (value instanceof Class<?> c) return "\"" + c.getSimpleName() + "\"";
+        return "\"" + value + "\"";
+    }
+
+    private Color getResourceColor(ResourceIdentifier rid) {
+        String ridStr = rid.toString();
+        if (ridStr.contains("Ask")) return Color.web("#44FF44");
+        if (ridStr.contains("Bid")) return Color.web("#4444FF");
+        if (ridStr.contains("MidPrice")) return Color.web("#FFAA00");
+        if (ridStr.contains("Spread")) return Color.web("#FF44FF");
+        if (ridStr.contains("Volume")) return Color.web("#44FFFF");
+        if (ridStr.contains("Vwap")) return Color.web("#FF8844");
+        if (ridStr.contains("MarkToMarket")) return Color.web("#FFFF44");
+        return ColorScheme.TEXT_SECONDARY;
+    }
+
     /**
      * Clear the display.
      */
@@ -374,14 +489,18 @@ public class InfoDisplayPane extends VBox {
         this.evaluationResult = null;
         updateDisplay();
     }
-    
-    /**
-     * Convert JavaFX Color to hex string for CSS.
-     */
+
+    private void styleScrollPane(ScrollPane sp) {
+        sp.setStyle(
+                "-fx-background: " + toHexString(ColorScheme.BACKGROUND_DARK) + ";" +
+                "-fx-background-color: " + toHexString(ColorScheme.BACKGROUND_DARK) + ";"
+        );
+    }
+
     private String toHexString(javafx.scene.paint.Color color) {
         return String.format("#%02X%02X%02X",
-            (int) (color.getRed() * 255),
-            (int) (color.getGreen() * 255),
-            (int) (color.getBlue() * 255));
+                (int) (color.getRed() * 255),
+                (int) (color.getGreen() * 255),
+                (int) (color.getBlue() * 255));
     }
 }

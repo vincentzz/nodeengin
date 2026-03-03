@@ -1,0 +1,112 @@
+/* ===== Tab Pane - Chrome-style tabs (dark theme) ===== */
+
+.tab-pane {
+    -fx-background-color: #2D2D2D;
+    -fx-tab-min-height: 26px;
+    -fx-tab-max-height: 26px;
+}
+
+/* Header strip — the shelf behind the tabs */
+.tab-pane .tab-header-area {
+    -fx-padding: 4 6 0 6;
+    -fx-background-color: #1A1A1A;
+    -fx-border-color: transparent;
+}
+
+.tab-pane .tab-header-background {
+    -fx-background-color: #1A1A1A;
+}
+
+.tab-pane .headers-region {
+    -fx-background-color: transparent;
+}
+
+/* ---- Individual tab (inactive) ---- */
+.tab-pane .tab {
+    -fx-background-color: #252525;
+    -fx-background-insets: 0;
+    -fx-background-radius: 6 6 0 0;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-padding: 3 10 3 10;
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+}
+
+.tab-pane .tab .tab-label {
+    -fx-text-fill: #909090;
+    -fx-font-size: 11px;
+}
+
+/* ---- Hover (inactive) ---- */
+.tab-pane .tab:hover {
+    -fx-background-color: #333333;
+}
+
+.tab-pane .tab:hover .tab-label {
+    -fx-text-fill: #C8C8C8;
+}
+
+/* ---- Selected / active tab — matches canvas #2D2D2D ---- */
+.tab-pane .tab:selected {
+    -fx-background-color: #2D2D2D;
+    -fx-background-radius: 6 6 0 0;
+    -fx-border-color: transparent;
+}
+
+.tab-pane .tab:selected .tab-label {
+    -fx-text-fill: #FFFFFF;
+}
+
+.tab-pane .tab:selected:hover {
+    -fx-background-color: #2D2D2D;
+}
+
+/* ---- Close button — always visible ---- */
+.tab-pane .tab .tab-close-button {
+    -fx-background-color: #909090;
+    -fx-shape: "M 2.58,1.02 L 5,3.44 L 7.42,1.02 L 8.48,2.08 L 6.06,4.5 L 8.48,6.92 L 7.42,7.98 L 5,5.56 L 2.58,7.98 L 1.52,6.92 L 3.94,4.5 L 1.52,2.08 Z";
+    -fx-padding: 4;
+    -fx-margin: 0 0 0 6;
+    -fx-min-width: 10;
+    -fx-min-height: 10;
+    -fx-pref-width: 10;
+    -fx-pref-height: 10;
+}
+
+.tab-pane .tab:hover .tab-close-button,
+.tab-pane .tab:selected .tab-close-button {
+    -fx-background-color: #B0B0B0;
+}
+
+.tab-pane .tab .tab-close-button:hover {
+    -fx-background-color: #FFFFFF;
+}
+
+/* ---- Content area ---- */
+.tab-pane .tab-content-area {
+    -fx-background-color: #2D2D2D;
+    -fx-border-color: transparent;
+}
+
+/* ---- Overflow / dropdown button ---- */
+.tab-pane .control-buttons-tab {
+    -fx-background-color: #1A1A1A;
+}
+
+.tab-pane .tab-down-button {
+    -fx-background-color: transparent;
+    -fx-padding: 3;
+}
+
+.tab-pane .tab-down-button:hover {
+    -fx-background-color: #333333;
+}
+
+.tab-pane .tab-down-button .arrow {
+    -fx-background-color: #808080;
+}
+
+.tab-pane .tab-down-button:hover .arrow {
+    -fx-background-color: #CCCCCC;
+}
