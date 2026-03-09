@@ -113,6 +113,7 @@ public class CalculationCanvas extends ScrollPane {
     private Runnable onResetRequested; // Callback for reset button in edit mode
     private Runnable onFlywireEditRequested; // Callback for Flywires button in edit mode
     private Runnable onScopeEditRequested; // Callback for Scope button in edit mode
+    private int hoveredButtonIndex = -1; // Index of hovered edit button (-1 = none)
     
     /**
      * Helper class to store information about a node connection point.
@@ -273,6 +274,20 @@ public class CalculationCanvas extends ScrollPane {
             flywireCurrentPoint = new Point2D(event.getX(), event.getY());
             render();
             return;
+        }
+
+        // Check edit-mode button hover
+        if (editModel != null) {
+            int prevHovered = hoveredButtonIndex;
+            hoveredButtonIndex = findHoveredButtonIndex(event.getX(), event.getY());
+            if (hoveredButtonIndex != prevHovered) {
+                if (hoveredButtonIndex >= 0) {
+                    setCursor(Cursor.HAND);
+                }
+                render();
+                if (hoveredButtonIndex >= 0) return;
+            }
+            if (hoveredButtonIndex >= 0) return;
         }
 
         // Store previous hover states to detect changes
@@ -448,6 +463,25 @@ public class CalculationCanvas extends ScrollPane {
         }
     }
     
+    private int findHoveredButtonIndex(double x, double y) {
+        double buttonWidth = 80;
+        double buttonHeight = 30;
+        double buttonSpacing = 10;
+        double margin = 20;
+        double fixedRightEdge = Math.max(getViewportBounds().getWidth(), MIN_CANVAS_WIDTH) - 20;
+        double startX = fixedRightEdge - (buttonWidth * 4 + buttonSpacing * 3);
+        double buttonY = margin;
+
+        for (int i = 0; i < 4; i++) {
+            double btnX = startX + i * (buttonWidth + buttonSpacing);
+            if (x >= btnX && x <= btnX + buttonWidth &&
+                y >= buttonY && y <= buttonY + buttonHeight) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     /**
      * Check if a click is within the edit buttons area.
      */
@@ -3453,34 +3487,27 @@ public class CalculationCanvas extends ScrollPane {
         double startX = fixedRightEdge - (buttonWidth * 4 + buttonSpacing * 3);
         double buttonY = margin;
 
-        // Draw Group button
-        double groupButtonX = startX;
-        drawCanvasButton(groupButtonX, buttonY, buttonWidth, buttonHeight, "Group",
-                canGroup ? ColorScheme.NODE_BACKGROUND : ColorScheme.BACKGROUND_MEDIUM,
-                canGroup ? ColorScheme.TEXT_PRIMARY : ColorScheme.TEXT_SECONDARY);
+        String[] labels = {"Group", "Ungroup", "Flywires", "Scope"};
+        boolean[] enabled = {canGroup, canUngroup, true, true};
 
-        // Draw Ungroup button
-        double ungroupButtonX = startX + buttonWidth + buttonSpacing;
-        drawCanvasButton(ungroupButtonX, buttonY, buttonWidth, buttonHeight, "Ungroup",
-                canUngroup ? ColorScheme.NODE_BACKGROUND : ColorScheme.BACKGROUND_MEDIUM,
-                canUngroup ? ColorScheme.TEXT_PRIMARY : ColorScheme.TEXT_SECONDARY);
-
-        // Draw Flywires button
-        double flywireButtonX = startX + (buttonWidth + buttonSpacing) * 2;
-        drawCanvasButton(flywireButtonX, buttonY, buttonWidth, buttonHeight, "Flywires",
-                ColorScheme.NODE_BACKGROUND, ColorScheme.TEXT_PRIMARY);
-
-        // Draw Scope button
-        double scopeButtonX = startX + (buttonWidth + buttonSpacing) * 3;
-        drawCanvasButton(scopeButtonX, buttonY, buttonWidth, buttonHeight, "Scope",
-                ColorScheme.NODE_BACKGROUND, ColorScheme.TEXT_PRIMARY);
+        for (int i = 0; i < 4; i++) {
+            double btnX = startX + i * (buttonWidth + buttonSpacing);
+            Color bg = enabled[i] ? ColorScheme.NODE_BACKGROUND : ColorScheme.BACKGROUND_MEDIUM;
+            Color fg = enabled[i] ? ColorScheme.TEXT_PRIMARY : ColorScheme.TEXT_SECONDARY;
+            boolean hovered = (hoveredButtonIndex == i);
+            drawCanvasButton(btnX, buttonY, buttonWidth, buttonHeight, labels[i], bg, fg, hovered);
+        }
     }
 
-    private void drawCanvasButton(double x, double y, double w, double h, String text, Color bgColor, Color textColor) {
-        gc.setFill(bgColor);
+    private void drawCanvasButton(double x, double y, double w, double h, String text,
+                                   Color bgColor, Color textColor, boolean hovered) {
+        Color bg = hovered ? bgColor.brighter().brighter() : bgColor;
+        Color border = hovered ? ColorScheme.TEXT_PRIMARY : ColorScheme.NODE_BORDER;
+
+        gc.setFill(bg);
         gc.fillRoundRect(x, y, w, h, 5, 5);
-        gc.setStroke(ColorScheme.NODE_BORDER);
-        gc.setLineWidth(1);
+        gc.setStroke(border);
+        gc.setLineWidth(hovered ? 1.5 : 1);
         gc.strokeRoundRect(x, y, w, h, 5, 5);
 
         gc.setFont(Font.font("Arial", FontWeight.NORMAL, 11));

@@ -228,8 +228,9 @@ public class EditModeTab extends Tab {
         if (nodeGroups.isEmpty()) return;
 
         Label sectionLabel = new Label("Node Groups");
-        sectionLabel.setFont(Font.font("System", FontWeight.BOLD, 13));
+        sectionLabel.setFont(Font.font("System", FontWeight.BOLD, 14));
         sectionLabel.setTextFill(ColorScheme.TEXT_PRIMARY);
+        sectionLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: " + toHexString(ColorScheme.TEXT_PRIMARY) + ";");
         sidePaneContent.getChildren().add(sectionLabel);
 
         for (CalculationNode node : nodeGroups) {
@@ -286,8 +287,9 @@ public class EditModeTab extends Tab {
         if (instancesByClass.isEmpty()) return;
 
         Label sectionLabel = new Label("Atomic Nodes");
-        sectionLabel.setFont(Font.font("System", FontWeight.BOLD, 13));
+        sectionLabel.setFont(Font.font("System", FontWeight.BOLD, 14));
         sectionLabel.setTextFill(ColorScheme.TEXT_PRIMARY);
+        sectionLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: " + toHexString(ColorScheme.TEXT_PRIMARY) + ";");
         sidePaneContent.getChildren().add(sectionLabel);
 
         for (var entry : instancesByClass.entrySet()) {
@@ -296,7 +298,7 @@ public class EditModeTab extends Tab {
 
             // Build instance rows content
             VBox instanceContent = new VBox(3);
-            instanceContent.setPadding(new Insets(2, 0, 2, 5));
+            instanceContent.setPadding(new Insets(2, 0, 2, 20));
 
             for (CalculationNode instance : instances) {
                 String instanceName = instance.name();
@@ -361,21 +363,27 @@ public class EditModeTab extends Tab {
             createBtn.setOnAction(e -> handleCreateAtomicNode(className));
             styleSmallButton(createBtn);
 
-            HBox headerGraphic = new HBox(5, classEyeCheckBox, classLabel, createBtn);
-            headerGraphic.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+            Label arrow = new Label("\u25B6");
+            arrow.setTextFill(ColorScheme.TEXT_SECONDARY);
+            arrow.setFont(Font.font("System", 11));
+            arrow.setMinWidth(12);
 
-            TitledPane titledPane = new TitledPane();
-            titledPane.setGraphic(headerGraphic);
-            titledPane.setText(null);
-            titledPane.setContent(instanceContent);
-            titledPane.setExpanded(false);
-            titledPane.setAnimated(false);
-            titledPane.setStyle(
-                    "-fx-text-fill: " + toHexString(ColorScheme.TEXT_SECONDARY) + ";" +
-                    "-fx-font-size: 11px;"
-            );
+            Region headerSpacer = new Region();
+            HBox.setHgrow(headerSpacer, Priority.ALWAYS);
+            HBox headerRow = new HBox(5, arrow, classEyeCheckBox, classLabel, headerSpacer, createBtn);
+            headerRow.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
 
-            sidePaneContent.getChildren().add(titledPane);
+            instanceContent.setVisible(false);
+            instanceContent.setManaged(false);
+
+            headerRow.setOnMouseClicked(e -> {
+                boolean show = !instanceContent.isVisible();
+                instanceContent.setVisible(show);
+                instanceContent.setManaged(show);
+                arrow.setText(show ? "\u25BC" : "\u25B6");
+            });
+
+            sidePaneContent.getChildren().addAll(headerRow, instanceContent);
         }
 
         addSeparator();
@@ -397,8 +405,9 @@ public class EditModeTab extends Tab {
         if (availableClasses.isEmpty()) return;
 
         Label sectionLabel = new Label("Available Classes");
-        sectionLabel.setFont(Font.font("System", FontWeight.BOLD, 13));
+        sectionLabel.setFont(Font.font("System", FontWeight.BOLD, 14));
         sectionLabel.setTextFill(ColorScheme.TEXT_PRIMARY);
+        sectionLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: " + toHexString(ColorScheme.TEXT_PRIMARY) + ";");
         sidePaneContent.getChildren().add(sectionLabel);
 
         for (String className : availableClasses) {
@@ -416,7 +425,9 @@ public class EditModeTab extends Tab {
             createBtn.setOnAction(e -> handleCreateAtomicNode(className));
             styleSmallButton(createBtn);
 
-            row.getChildren().addAll(nameLabel, createBtn);
+            Region spacer = new Region();
+            HBox.setHgrow(spacer, Priority.ALWAYS);
+            row.getChildren().addAll(nameLabel, spacer, createBtn);
             sidePaneContent.getChildren().add(row);
         }
     }
@@ -961,15 +972,33 @@ public class EditModeTab extends Tab {
     }
 
     private void styleSmallButton(Button button) {
-        button.setStyle(
-                "-fx-background-color: " + toHexString(ColorScheme.NODE_BACKGROUND) + ";" +
-                "-fx-text-fill: " + toHexString(ColorScheme.TEXT_PRIMARY) + ";" +
-                "-fx-border-color: " + toHexString(ColorScheme.NODE_BORDER) + ";" +
+        String normalBg = toHexString(ColorScheme.NODE_BACKGROUND);
+        String hoverBg = toHexString(ColorScheme.NODE_BACKGROUND.brighter().brighter());
+        String textColor = toHexString(ColorScheme.TEXT_PRIMARY);
+        String borderColor = toHexString(ColorScheme.NODE_BORDER);
+        String hoverBorder = toHexString(ColorScheme.TEXT_PRIMARY);
+
+        String normalStyle =
+                "-fx-background-color: " + normalBg + ";" +
+                "-fx-text-fill: " + textColor + ";" +
+                "-fx-border-color: " + borderColor + ";" +
                 "-fx-border-width: 1px;" +
                 "-fx-font-size: 11px;" +
                 "-fx-padding: 2 6 2 6;" +
-                "-fx-min-width: 24px;"
-        );
+                "-fx-min-width: 24px;";
+
+        String hoverStyle =
+                "-fx-background-color: " + hoverBg + ";" +
+                "-fx-text-fill: " + textColor + ";" +
+                "-fx-border-color: " + hoverBorder + ";" +
+                "-fx-border-width: 1px;" +
+                "-fx-font-size: 11px;" +
+                "-fx-padding: 2 6 2 6;" +
+                "-fx-min-width: 24px;";
+
+        button.setStyle(normalStyle);
+        button.setOnMouseEntered(e -> button.setStyle(hoverStyle));
+        button.setOnMouseExited(e -> button.setStyle(normalStyle));
     }
 
     private void styleScrollPane(ScrollPane scrollPane) {
